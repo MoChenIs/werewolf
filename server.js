@@ -121,15 +121,15 @@ io.on('connection', (socket) => {
  message: ' 狼人行动中'
  });
 
- // 告知狼人队友
- const werewolves = engine.getWerewolves();
+ // 告知狼人队友（仅存活狼人）
+ const werewolves = engine.getWerewolves().filter(w => w.isAlive);
  const werewolfSeats = werewolves.map(w => ({ seat: w.seat, name: w.name }));
 
  werewolves.forEach(w => {
  io.to(w.id).emit('night_teammates', { teammates: werewolfSeats.filter(t => t.seat !== w.seat) });
  });
 
- // 通知所有狼人投票选择目标
+ // 通知所有存活狼人投票选择目标
  const targets = Array.from(room.players.values()).filter(p => p.isAlive).map(p => ({ seat: p.seat, name: p.name }));
 
  engine.werewolfVotes = {};
@@ -871,7 +871,7 @@ function handleNightPhase(room, io, result) {
  if (result.prevPhase && phaseFlowNames[result.prevPhase]) {
  io.to(room.id).emit('phase_change', {
  phase: result.phase,
- message: `${phaseFlowNames[result.prevPhase]}处理完成`,
+ message: `${phaseFlowNames[result.prevPhase]}行动结束`,
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
@@ -905,7 +905,7 @@ function handleNightPhase(room, io, result) {
  const phaseMsg = phaseFlowNames[result.phase];
  io.to(room.id).emit('phase_change', {
  phase: result.phase,
- message: phaseMsg ? `${phaseMsg}处理中` : (result.message || ` 第${room.game.round}轮·进行中`),
+ message: phaseMsg ? `${phaseMsg}行动中` : (result.message || ` 第${room.game.round}轮·进行中`),
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
@@ -972,7 +972,7 @@ function handleNightPhase(room, io, result) {
  if (nextPhase.prevPhase && phaseFlowNames[nextPhase.prevPhase]) {
  io.to(room.id).emit('phase_change', {
  phase: nextPhase.phase, deaths: nextPhase.deaths,
- message: `${phaseFlowNames[nextPhase.prevPhase]}处理完成`,
+ message: `${phaseFlowNames[nextPhase.prevPhase]}行动结束`,
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
@@ -1052,7 +1052,7 @@ function restartGame(room) {
  message: ' 狼人行动中'
  });
 
- const werewolves = engine.getWerewolves();
+ const werewolves = engine.getWerewolves().filter(w => w.isAlive);
  const werewolfSeats = werewolves.map(w => ({ seat: w.seat, name: w.name }));
  werewolves.forEach(w => {
  io.to(w.id).emit('night_teammates', { teammates: werewolfSeats.filter(t => t.seat !== w.seat) });
@@ -1206,7 +1206,7 @@ function autoProcessAiNight(room, io) {
  if (next.prevPhase && phaseFlowNames[next.prevPhase]) {
  io.to(room.id).emit('phase_change', {
  phase: next.phase, deaths: next.deaths,
- message: `${phaseFlowNames[next.prevPhase]}处理完成`,
+ message: `${phaseFlowNames[next.prevPhase]}行动结束`,
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))

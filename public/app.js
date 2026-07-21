@@ -39,6 +39,7 @@ let _cachedPlayers = [];
 let _currentSpeakerSeat = null;
 let _myNightPhase = null;
 let _tiedSeats = [];
+let _selectedWolfTarget = null;
 
 // 页面切换
 function showPage(pageId) {
@@ -486,7 +487,11 @@ function updateActionPanel(phase) {
  let targets;
  let title;
  if (phase === 'tie_vote' && _tiedSeats.length) {
- // 同票重投：只显示候选人
+ // 同票重投：只显示候选人，但候选人本人不能投票
+ if (_tiedSeats.includes(currentSeat)) {
+ panel.innerHTML = `<p class="waiting-text"> 平票候选人等待表决结果...</p>`;
+ return;
+ }
  targets = _cachedPlayers.filter(p => _tiedSeats.includes(p.seat) && p.seat !== currentSeat);
  title = ` 请表决 - 在 ${_tiedSeats.map(s => s + '号').join(' ')} 中选择`;
  } else {
@@ -542,13 +547,17 @@ function renderNightAction(phase, panel) {
  <div class="night-area">
  <div class="night-title"> 小组投票</div>
  <p class="skill-name">选择待处理成员</p>
- <select id="night-target">
- ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
- </select>
- <button class="btn-confirm" onclick="submitNightAction('kill')">投票</button>
- <div style="margin-top:12px;padding:8px;background:#f5f7fa;border-radius:4px;font-size:13px;color:#666;">
- <div style="font-weight:600;margin-bottom:4px;"> 表决结果</div>
- <div id="werewolf-votes">等待表决...</div>
+ <div class="vote-targets">
+ ${targets.map(t => `
+ <button class="vote-target" onclick="selectWolfTarget(${t.seat})" id="wolf-target-${t.seat}">
+ ${t.seat}号 ${t.name}
+ </button>
+ `).join('')}
+ </div>
+ <button class="btn-confirm" onclick="submitNightAction('kill')" style="margin-top:6px;">确认</button>
+ <div style="margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:var(--radius-sm);font-size:12px;color:var(--text-secondary);">
+ <div style="font-weight:600;margin-bottom:2px;">表决结果</div>
+ <div id="werewolf-votes">等待投票...</div>
  </div>
  </div>
  `;
@@ -665,8 +674,21 @@ function castVote(targetSeat) {
 }
 
 // ========== 夜间行动函数 ==========
+function selectWolfTarget(seat) {
+ _selectedWolfTarget = seat;
+ document.querySelectorAll('#werewolf-votes').forEach(el => el.closest('.vote-targets')?.querySelectorAll('.vote-target').forEach(b => b.classList.remove('selected')));
+ const btn = document.getElementById('wolf-target-' + seat);
+ if (btn) btn.classList.add('selected');
+}
+
 function submitNightAction(type) {
- const target = parseInt(document.getElementById('night-target').value);
+ let target;
+ if (type === 'kill') {
+ target = _selectedWolfTarget;
+ if (!target) { showError('请先选择目标'); return; }
+ } else {
+ target = parseInt(document.getElementById('night-target').value);
+ }
  socket.emit('night_action', { target, action: type });
 }
 
