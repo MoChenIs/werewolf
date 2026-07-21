@@ -240,6 +240,47 @@ class GameEngine {
     this.addLog('system', `第${this.round}夜，天黑请闭眼。`);
     return { phase: this.phase };
   }
+
+  // 标记玩家已发言（挂机检测）
+  markPlayerSpoke(seat) {
+    const player = Array.from(this.room.players.values()).find(p => p.seat === seat);
+    if (player) {
+      player.lastSpokeRound = this.round;
+    }
+  }
+
+  // 检查挂机玩家
+  checkAfk() {
+    const alivePlayers = Array.from(this.room.players.values())
+      .filter(p => p.isAlive);
+    const afkPlayers = [];
+
+    alivePlayers.forEach(p => {
+      if (p.lastSpokeRound !== undefined && p.lastSpokeRound < this.round - 1) {
+        p.warnings = (p.warnings || 0) + 1;
+        if (p.warnings >= 2) {
+          p.isAlive = false;
+          p.isAfk = true;
+          afkPlayers.push(p);
+          this.addLog('system', `${p.seat}号 ${p.name} 因连续挂机被移出游戏`);
+        }
+      }
+    });
+
+    return afkPlayers;
+  }
+
+  // 标记投票（弃权检测）
+  markVoted(seat) {
+    const player = Array.from(this.room.players.values()).find(p => p.seat === seat);
+    if (player && player.voteTarget === 0) {
+      player.abstainCount = (player.abstainCount || 0) + 1;
+      if (player.abstainCount >= 3) {
+        player.warnings = (player.warnings || 0) + 1;
+        this.addLog('system', `${player.seat}号 ${player.name} 连续3轮弃权，收到警告`);
+      }
+    }
+  }
 }
 
 module.exports = { GameEngine, roles };

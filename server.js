@@ -121,6 +121,12 @@ io.on('connection', (socket) => {
 
     // 敏感词过滤
     const filtered = filterSensitiveWords(content);
+    if (filtered !== content) {
+      socket.emit('error', { code: 'SENSITIVE', message: '你的发言包含敏感词，已被过滤' });
+    }
+
+    // 记录发言（挂机检测）
+    engine.markPlayerSpoke(player.seat);
 
     io.to(room.id).emit('speech_broadcast', {
       seat: player.seat,
@@ -264,12 +270,90 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`[断开] 玩家断开: ${socket.id}`);
-    const result = roomManager.leaveRoom(socket.id);
-    if (result && result.action === 'left') {
-      io.to(result.roomId).emit('player_left', { seat: result.seat });
-      if (result.newHost) {
-        io.to(result.roomId).emit('host_changed', { newHost: result.newHost });
+    const room = roomManager.findRoomBySocket(socket.id);
+    if (room) {
+      const player = room.players.get(socket.id);
+      if (player) {
+        player.disconnected = true;
+        io.to(room.id).emit('player_disconnected', { seat: player.seat });
+        io.to(room.id).emit('phase_change', {
+          phase: room.game ? room.game.phase : 'waiting',
+          players: Array.from(room.players.values()).map(p => ({
+            seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+          }))
+        });
+        // 60秒后根据房间状态处理
+        room._disconnectTimer = setTimeout(() => {
+          if (player.disconnected && room.status === 'waiting') {
+            const result = roomManager.leaveRoom(socket.id);
+            if (result.action === 'left') {
+              io.to(room.id).emit('player_left', { seat: result.seat });
+              if (result.newHost) {
+                io.to(room.id).emit('host_changed', { newHost: result.newHost });
+              }
+            }
+          } else if (player.disconnected && room.status === 'playing') {
+            player.isAlive = false;
+            io.to(room.id).emit('phase_change', {
+              phase: room.game.phase,
+              message: `${player.seat}号 ${player.name} 因断线超时，被标记为出局`,
+              players: Array.from(room.players.values()).map(p => ({
+                seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+              }))
+            });
+          }
+        }, 60000);
       }
+    }
+  });
+
+  // 重连
+  socket.on('reconnect_player', ({ roomId, seat }) => {
+    const room = roomManager.rooms.get(roomId);
+    if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '房间不存在' });
+
+    let player = null;
+    for (const [, p] of room.players) {
+      if (p.seat === seat) {
+        player = p;
+        break;
+      }
+    }
+
+    if (!player) return socket.emit('error', { code: 'NOT_IN_ROOM', message: '你不在这个房间中' });
+
+    const oldId = player.id;
+    player.id = socket.id;
+    player.disconnected = false;
+    socket.join(roomId);
+
+    if (room._disconnectTimer) {
+      clearTimeout(room._disconnectTimer);
+      room._disconnectTimer = null;
+    }
+
+    socket.emit('room_joined', roomManager.getRoomInfo(room));
+
+    if (room.game) {
+      const engine = room.game;
+      socket.emit('game_started', { role: player.role });
+      socket.emit('phase_change', {
+        phase: engine.phase,
+        message: `欢迎回来，当前是 ${engine.phase}`,
+        players: Array.from(room.players.values()).map(p => ({
+          seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+        }))
+      });
+
+      // 如果当前是发言阶段，推送计时
+      if (engine.phase === 'free_speech' && engine.speechStartTime) {
+        socket.emit('timer_sync', {
+          startTimestamp: engine.speechStartTime,
+          duration: engine.speechDuration
+        });
+      }
+
+      io.to(roomId).emit('player_reconnected', { seat: player.seat });
     }
   });
 });

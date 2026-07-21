@@ -1,6 +1,18 @@
 // public/app.js - 前端主逻辑
 const socket = io();
 
+// 断线重连：检查是否有保存的游戏状态
+(function tryReconnect() {
+  const savedSeat = sessionStorage.getItem('werewolf_seat');
+  const savedRoom = sessionStorage.getItem('werewolf_room');
+  if (savedSeat && savedRoom) {
+    socket.emit('reconnect_player', {
+      roomId: savedRoom,
+      seat: parseInt(savedSeat)
+    });
+  }
+})();
+
 // DOM 引用
 const lobbyPage = document.getElementById('lobby-page');
 const roomPage = document.getElementById('room-page');
@@ -53,6 +65,7 @@ joinRoomBtn.addEventListener('click', () => {
 // ========== 服务端事件 ==========
 socket.on('room_joined', (info) => {
   currentRoomId = info.id;
+  sessionStorage.setItem('werewolf_room', info.id);
   showPage('room-page');
   roomIdDisplay.textContent = info.id;
   updatePlayerList(info.players);
@@ -63,6 +76,8 @@ socket.on('room_joined', (info) => {
 socket.on('your_info', (info) => {
   currentPlayerId = info.playerId;
   currentSeat = info.seat;
+  sessionStorage.setItem('werewolf_seat', info.seat.toString());
+  sessionStorage.setItem('werewolf_playerId', info.playerId);
 });
 
 socket.on('player_joined', (data) => {
@@ -210,6 +225,20 @@ socket.on('witch_info', (data) => {
   if (document.getElementById('witch-use-kill')) {
     document.getElementById('witch-use-kill').disabled = !data.hasKill;
   }
+});
+
+// 断线/重连事件
+socket.on('player_disconnected', (data) => {
+  addMessage('system', `⚠️ ${data.seat}号玩家断线了...（60秒内等待重连）`);
+  if (data.players) {
+    _cachedPlayers = data.players.map(p => ({ ...p }));
+  }
+  updatePlayerStatusList();
+});
+
+socket.on('player_reconnected', (data) => {
+  addMessage('system', `✅ ${data.seat}号玩家重新连接`);
+  updatePlayerStatusList();
 });
 
 // 更新玩家列表
