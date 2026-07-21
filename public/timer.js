@@ -56,7 +56,7 @@ class GameTimer {
     if (seconds <= 10 && seconds > 0) {
       timerEl.style.color = '#ff4444';
     } else {
-      timerEl.style.color = '#f0c040';
+      timerEl.style.color = '#666';
     }
   }
 
