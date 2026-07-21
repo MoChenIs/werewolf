@@ -73,7 +73,7 @@ io.on('connection', (socket) => {
         player.isAlive = false;
         player.disconnected = true;
         socket.leave(room.id);
-        io.to(room.id).emit('player_left', { seat: player.seat });
+        io.to(room.id).emit('player_left', { seat: player.seat, name: player.name });
         io.to(room.id).emit('phase_change', {
           phase: room.game ? room.game.phase : 'playing',
           players: Array.from(room.players.values()).map(p => ({
@@ -87,7 +87,7 @@ io.on('connection', (socket) => {
       if (result.error) return;
       if (result.action === 'left') {
         socket.leave(result.roomId);
-        socket.to(result.roomId).emit('player_left', { seat: result.seat });
+        socket.to(result.roomId).emit('player_left', { seat: result.seat, name: result.name });
         if (result.newHost) {
           io.to(result.roomId).emit('host_changed', { newHost: result.newHost });
         }
@@ -300,6 +300,30 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 再来一局
+  socket.on('play_again', () => {
+    const room = roomManager.findRoomBySocket(socket.id);
+    if (!room || room.status !== 'ended') return;
+
+    if (!room.playAgainVotes) room.playAgainVotes = new Set();
+    room.playAgainVotes.add(socket.id);
+
+    // 人类玩家总数（AI 自动同意）
+    const totalHumans = Array.from(room.players.values()).filter(p => !p.isAi).length;
+    const votedCount = room.playAgainVotes.size;
+
+    // 全 AI 局直接重开
+    if (totalHumans === 0) return restartGame(room);
+
+    io.to(room.id).emit('play_again_count', {
+      count: votedCount,
+      total: totalHumans
+    });
+
+    // 所有人类玩家都同意 = 重开
+    if (votedCount >= totalHumans) restartGame(room);
+  });
+
   // 猎人被动技能：死亡后带走一人
   socket.on('hunter_shoot', ({ targetSeat }) => {
     const room = roomManager.findRoomBySocket(socket.id);
@@ -354,7 +378,7 @@ io.on('connection', (socket) => {
           if (player.disconnected && room.status === 'waiting') {
             const result = roomManager.leaveRoom(socket.id);
             if (result.action === 'left') {
-              io.to(room.id).emit('player_left', { seat: result.seat });
+              io.to(room.id).emit('player_left', { seat: result.seat, name: result.name });
               if (result.newHost) {
                 io.to(room.id).emit('host_changed', { newHost: result.newHost });
               }
@@ -921,6 +945,26 @@ function checkAndHandleGameEnd(room, io) {
   });
   room.status = 'ended';
   return true;
+}
+
+// ========== 再来一局 ==========
+
+function restartGame(room) {
+  room.playAgainVotes = null;
+  room.status = 'waiting';
+  room.players.forEach(p => {
+    p.isAlive = true;
+    p.role = null;
+    p.hasVoted = false;
+    p.voteTarget = null;
+    p.disconnected = false;
+    p.isAfk = false;
+    p.warnings = 0;
+  });
+  room.seatCount = room.players.size;
+  room.game = null;
+
+  io.to(room.id).emit('room_joined', roomManager.getRoomInfo(room));
 }
 
 // ========== 猎人被动技能 ==========

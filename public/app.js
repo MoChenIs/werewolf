@@ -111,7 +111,7 @@ socket.on('player_joined', (data) => {
 });
 
 socket.on('player_left', (data) => {
-  addMessage('system', `成员离开：${data.seat}号`);
+  addMessage('system', `用户${data.name}退出了房间`);
 });
 
 socket.on('host_changed', (data) => {
@@ -263,7 +263,11 @@ socket.on('game_over', (data) => {
           </div>
         `).join('')}
       </div>
-      <button class="btn btn-primary" onclick="location.reload()" style="margin-top:14px;">返回</button>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn btn-primary" style="flex:1;" onclick="playAgain()">再来一局</button>
+        <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="location.reload()">返回大厅</button>
+      </div>
+      <div id="play-again-status" style="margin-top:8px;font-size:12px;color:#999;"></div>
     </div>
   `;
 
@@ -274,6 +278,18 @@ socket.on('game_over', (data) => {
   sessionStorage.removeItem('werewolf_room');
   sessionStorage.removeItem('werewolf_role');
 });
+
+// 再来一局计数
+socket.on('play_again_count', (data) => {
+  const el = document.getElementById('play-again-status');
+  if (el) el.textContent = `等待其他玩家同意 (${data.count}/${data.total})`;
+});
+
+function playAgain() {
+  socket.emit('play_again');
+  const el = document.getElementById('play-again-status');
+  if (el) el.textContent = '已同意，等待其他玩家...';
+}
 
 // 夜间队友信息
 socket.on('night_teammates', (data) => {

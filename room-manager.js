@@ -122,10 +122,10 @@ class RoomManager {
           const nextHost = Array.from(room.players.values()).find(p => !p.isAi);
           if (!nextHost) return { roomId, action: 'destroyed' };
           room.host = nextHost.id;
-          return { roomId, action: 'left', newHost: nextHost, seat: player.seat };
+          return { roomId, action: 'left', newHost: nextHost, seat: player.seat, name: player.name };
         }
 
-        return { roomId, action: 'left', seat: player.seat };
+        return { roomId, action: 'left', seat: player.seat, name: player.name };
       }
     }
     return { error: '玩家不在任何房间中' };
