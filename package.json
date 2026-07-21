@@ -1,0 +1,14 @@
+{
+  "name": "werewolf-text-game",
+  "version": "1.0.0",
+  "description": "纯文字线上狼人杀（90s打字版）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/game-engine.test.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  }
+}
