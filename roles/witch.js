@@ -11,23 +11,24 @@ function processWitchAction(engine, socketId, { save, killTarget }) {
 
   const result = { success: true, messages: [] };
 
+  // 不能同时使用两瓶药（如果都勾了，优先使用解药）
+  const wantSave = save === true;
+  const wantKill = killTarget !== undefined && killTarget !== null && killTarget > 0;
+
   // 使用解药
-  if (save !== undefined && save !== null) {
+  if (wantSave && !wantKill) {
     if (engine.witchUsedSave) return { error: '你已使用过解药' };
-    if (save === true) {
-      const killedSeat = engine.nightActions.werewolfKill;
-      if (!killedSeat) return { error: '今晚无人被狼人击杀' };
-      engine.nightActions.witchSave = killedSeat;
-      engine.witchUsedSave = true;
-      engine.addLog('night_action', `女巫使用解药救活 ${killedSeat}号`);
-      result.messages.push(`你使用了解药，救活了 ${killedSeat}号玩家`);
-    }
+    const killedSeat = engine.nightActions.werewolfKill;
+    if (!killedSeat) return { error: '今晚无人被狼人击杀' };
+    engine.nightActions.witchSave = killedSeat;
+    engine.witchUsedSave = true;
+    engine.addLog('night_action', `女巫使用解药救活 ${killedSeat}号`);
+    result.messages.push(`你使用了解药，救活了 ${killedSeat}号玩家`);
   }
 
   // 使用毒药
-  if (killTarget !== undefined && killTarget !== null) {
+  if (wantKill && !wantSave) {
     if (engine.witchUsedKill) return { error: '你已使用过毒药' };
-    if (killTarget <= 0) return { success: true, messages: result.messages };
     const target = Array.from(engine.room.players.values())
       .find(p => p.seat === killTarget);
     if (!target) return { error: '目标玩家不存在' };

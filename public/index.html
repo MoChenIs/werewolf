@@ -7,10 +7,11 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <div id="global-toast" class="toast-error hidden"></div>
   <div id="lobby-page" class="page">
     <div class="lobby-container">
-      <h1 class="game-title">🐺 纯文字狼人杀</h1>
-      <p class="game-subtitle">90s打字版 · 逻辑与口才的较量</p>
+      <h1 class="app-title">🤝 团队协作平台</h1>
+      <p class="app-subtitle">沟通 · 决策 · 反馈</p>
       <div class="lobby-actions">
         <div class="input-group">
           <input type="text" id="player-name" placeholder="输入你的昵称" maxlength="8">
@@ -30,7 +31,9 @@
     <div class="room-header">
       <span>房间号: <strong id="room-id-display"></strong></span>
       <span id="player-count-display">1/12</span>
-      <button id="start-game-btn" class="btn btn-primary btn-sm">开始游戏</button>
+      <button id="add-ai-btn" class="btn btn-secondary btn-sm hidden">+AI</button>
+      <button id="start-game-btn" class="btn btn-primary btn-sm hidden">开始游戏</button>
+      <button id="leave-room-btn" class="btn btn-sm leave-btn">退出</button>
     </div>
     <div id="player-list" class="player-list"></div>
   </div>

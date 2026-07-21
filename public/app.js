@@ -26,15 +26,19 @@ const roomIdDisplay = document.getElementById('room-id-display');
 const playerCountDisplay = document.getElementById('player-count-display');
 const playerListEl = document.getElementById('player-list');
 const startGameBtn = document.getElementById('start-game-btn');
+const addAiBtn = document.getElementById('add-ai-btn');
+const leaveRoomBtn = document.getElementById('leave-room-btn');
 
 let currentPlayerId = null;
 let currentSeat = null;
 let currentRoomId = null;
+let currentHostId = null;
 let gameTimer = null;
 let currentPhase = null;
 let _cachedPlayers = [];
 let _currentSpeakerSeat = null;
 let _myNightPhase = null;
+let _tiedSeats = [];
 
 // 页面切换
 function showPage(pageId) {
@@ -42,17 +46,36 @@ function showPage(pageId) {
   document.getElementById(pageId).classList.remove('hidden');
 }
 
-// 显示错误
+// 显示错误（全局 Toast，任何页面都可见）
 function showError(msg) {
+  const toast = document.getElementById('global-toast');
+  if (toast) {
+    toast.textContent = msg;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 3500);
+  }
+  // 同时也在大厅错误区显示（如果有）
   lobbyError.textContent = msg;
   lobbyError.classList.remove('hidden');
-  setTimeout(() => lobbyError.classList.add('hidden'), 3000);
+  setTimeout(() => lobbyError.classList.add('hidden'), 3500);
 }
 
 // ========== 客户端事件 ==========
 createRoomBtn.addEventListener('click', () => {
   const name = playerNameInput.value.trim() || `玩家${Math.floor(Math.random()*1000)}`;
   socket.emit('create_room', { playerName: name });
+});
+
+startGameBtn.addEventListener('click', () => {
+  socket.emit('start_game');
+});
+
+addAiBtn.addEventListener('click', () => {
+  socket.emit('add_ai');
+});
+
+leaveRoomBtn.addEventListener('click', () => {
+  socket.emit('leave_room');
 });
 
 joinRoomBtn.addEventListener('click', () => {
@@ -65,12 +88,15 @@ joinRoomBtn.addEventListener('click', () => {
 // ========== 服务端事件 ==========
 socket.on('room_joined', (info) => {
   currentRoomId = info.id;
+  currentHostId = info.host;
   sessionStorage.setItem('werewolf_room', info.id);
   showPage('room-page');
   roomIdDisplay.textContent = info.id;
   updatePlayerList(info.players);
   updatePlayerCount(info.playerCount, info.config.maxPlayers);
-  startGameBtn.classList.toggle('hidden', socket.id !== info.host);
+  const isHost = socket.id === info.host;
+  startGameBtn.classList.toggle('hidden', !isHost);
+  addAiBtn.classList.toggle('hidden', !isHost);
 });
 
 socket.on('your_info', (info) => {
@@ -81,15 +107,28 @@ socket.on('your_info', (info) => {
 });
 
 socket.on('player_joined', (data) => {
-  addMessage('system', `${data.name}（${data.seat}号）加入了房间`);
+  addMessage('system', `新成员加入：${data.name}（${data.seat}号）${data.isAi ? '🤖 ' : ''}`);
 });
 
 socket.on('player_left', (data) => {
-  addMessage('system', `${data.seat}号玩家离开了房间`);
+  addMessage('system', `成员离开：${data.seat}号`);
 });
 
 socket.on('host_changed', (data) => {
-  startGameBtn.classList.toggle('hidden', socket.id !== data.newHost);
+  currentHostId = data.newHost;
+  const isHost = socket.id === data.newHost;
+  startGameBtn.classList.toggle('hidden', !isHost);
+  addAiBtn.classList.toggle('hidden', !isHost);
+});
+
+socket.on('left_room', () => {
+  sessionStorage.removeItem('werewolf_seat');
+  sessionStorage.removeItem('werewolf_room');
+  sessionStorage.removeItem('werewolf_role');
+  currentRoomId = null;
+  _cachedPlayers = [];
+  currentPhase = null;
+  showPage('lobby-page');
 });
 
 socket.on('error', (data) => {
@@ -100,6 +139,8 @@ socket.on('error', (data) => {
 
 // 游戏开始
 socket.on('game_started', ({ role }) => {
+  // 清空旧聊天记录
+  document.getElementById('feed-messages').innerHTML = '';
   showPage('game-page');
   addMessage('system', `游戏开始！你的身份是：${getRoleName(role)}`);
   // 缓存自己的角色到 sessionStorage
@@ -121,6 +162,12 @@ socket.on('phase_change', (data) => {
   if (data.players) {
     _cachedPlayers = data.players.map(p => ({ ...p }));
   }
+  // 同票重投阶段记录候选人
+  if (data.phase === 'tie_vote' && data.tiedSeats) {
+    _tiedSeats = data.tiedSeats;
+  } else if (data.phase !== 'tie_vote' && data.phase !== 'tie_speech') {
+    _tiedSeats = [];
+  }
   updateActionPanel(data.phase);
   updatePlayerStatusList();
 });
@@ -138,6 +185,12 @@ socket.on('timer_sync', (data) => {
 // 轮到某玩家行动
 socket.on('your_turn', (data) => {
   _currentSpeakerSeat = data.seat;
+
+  // 发言阶段及时刷新当前发言者编号
+  if (data.action === 'speech') {
+    updateActionPanel(currentPhase);
+  }
+
   if (data.isYou) {
     if (data.action === 'speech') {
       addMessage('system', '🎤 轮到你了！请在规定时间内发言');
@@ -156,7 +209,35 @@ socket.on('speech_broadcast', (data) => {
 
 // 投票更新
 socket.on('vote_update', (data) => {
-  addMessage('system', `${data.seat}号玩家已投票 (${data.totalVoters}/${data.totalAlive})`);
+  addMessage('system', `${data.seat}号已表决 (${data.totalVoters}/${data.totalAlive})`);
+});
+
+// 投票结果（含详细投票记录）
+socket.on('vote_result', (data) => {
+  const nameMap = {};
+  _cachedPlayers.forEach(p => { nameMap[p.seat] = p.name; });
+
+  // 按得票数分组：targetSeat → [voterSeat, ...]
+  const groups = {};
+  Object.entries(data.rawVotes).forEach(([voter, target]) => {
+    const key = target == 0 ? '弃权' : target;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(parseInt(voter));
+  });
+
+  // 按票数从高到低排序
+  const sorted = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+
+  const lines = sorted.map(([target, voters]) => {
+    const votersStr = voters.map(s => `${s}号`).join('、');
+    if (target === '弃权') return `弃权：${voters.length} 票（${votersStr}）`;
+    const name = nameMap[target] || '';
+    return `${target}号：${voters.length} 票（${votersStr}）`;
+  });
+  addMessage('system', `📋 表决结果：\n${lines.join('\n')}`);
+  if (data.isTie && data.tiedSeats.length) {
+    addMessage('system', `⚖️ 同票：${data.tiedSeats.map(s => s + '号 ' + (nameMap[s] || '')).join('、')}`);
+  }
 });
 
 // 游戏结束
@@ -168,28 +249,26 @@ socket.on('game_over', (data) => {
 
   const panel = document.getElementById('action-panel');
   panel.innerHTML = `
-    <div style="text-align:center;padding:20px;">
-      <h2 style="color:${isWinner ? '#4ade80' : '#ff6b6b'};font-size:24px;margin-bottom:16px;">
-        ${isWinner ? '🎉 你赢了！' : '💀 你输了'}
+    <div class="game-over-panel">
+      <h2 style="color:${isWinner ? '#52c41a' : '#ff4d4f'};">
+        ${isWinner ? '✅ 胜利' : '❌ 失败'}
       </h2>
-      <p style="color:#f0c040;margin-bottom:20px;">${data.message}</p>
-      <h3 style="margin-bottom:12px;color:#888;">全玩家底牌</h3>
-      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:20px;">
+      <p style="color:#666;margin-bottom:14px;">${data.message}</p>
+      <h3 style="margin-bottom:10px;color:#999;font-size:13px;font-weight:400;">成员信息</h3>
+      <div class="role-list">
         ${data.roles.sort((a,b) => a.seat - b.seat).map(r => `
-          <div style="padding:6px 12px;background:#1a1a2e;border-radius:4px;font-size:14px;
-                      display:flex;justify-content:space-between;
-                      ${r.seat === currentSeat ? 'border:1px solid #e94560;' : ''}">
+          <div class="role-item" style="${r.seat === currentSeat ? 'border-color:#1890ff;background:#e6f7ff;' : ''}">
             <span>${r.seat}号 ${r.name}</span>
             <span style="color:${getRoleColor(r.role)}">${getRoleName(r.role)}</span>
           </div>
         `).join('')}
       </div>
-      <button class="btn btn-primary" onclick="location.reload()">返回大厅</button>
+      <button class="btn btn-primary" onclick="location.reload()" style="margin-top:14px;">返回</button>
     </div>
   `;
 
-  addMessage('result', `🏆 ${data.message}`);
-  addMessage('result', `👑 ${data.winner === 'good' ? '好人阵营' : '狼人阵营'}获胜！`);
+  addMessage('result', `🏁 ${data.message}`);
+  addMessage('result', `👥 ${data.winner === 'good' ? '好人胜利' : '狼人胜利'}`);
 
   sessionStorage.removeItem('werewolf_seat');
   sessionStorage.removeItem('werewolf_room');
@@ -227,6 +306,42 @@ socket.on('witch_info', (data) => {
   }
 });
 
+// 猎人被动：死亡后选择带走目标
+socket.on('hunter_activate', (data) => {
+  if (data.expired) {
+    addMessage('system', '⏰ 猎人技能超时');
+    return;
+  }
+  const panel = document.getElementById('action-panel');
+  const targets = data.targets || [];
+  if (!targets.length) {
+    addMessage('system', '🔫 无目标可带走');
+    return;
+  }
+  panel.innerHTML = `
+    <div class="night-area">
+      <div class="night-title">🔫 选择带走目标</div>
+      <p class="skill-name">你已出局，可以带走一名玩家</p>
+      <div class="vote-targets">
+        ${targets.map(t => `
+          <button class="vote-target" onclick="hunterShoot(${t.seat})">
+            ${t.seat}号 ${t.name}
+          </button>
+        `).join('')}
+        <button class="vote-target" onclick="hunterShoot(0)" style="color:#999;">
+          放弃
+        </button>
+      </div>
+    </div>
+  `;
+});
+
+function hunterShoot(targetSeat) {
+  socket.emit('hunter_shoot', { targetSeat });
+  addMessage('system', targetSeat > 0 ? `🔫 已选择带走 ${targetSeat}号` : '🔫 放弃技能');
+  document.getElementById('action-panel').innerHTML = '<p class="waiting-text">⏳ 等待继续...</p>';
+}
+
 // 断线/重连事件
 socket.on('player_disconnected', (data) => {
   addMessage('system', `⚠️ ${data.seat}号玩家断线了...（60秒内等待重连）`);
@@ -248,6 +363,7 @@ function updatePlayerList(players) {
       <span class="seat">#${p.seat}</span>
       <span>${p.name}</span>
       ${p.isHost ? '<span class="host-badge">房主</span>' : ''}
+      ${p.isAi ? '<span class="ai-badge">AI</span>' : ''}
     </div>
   `).join('');
 }
@@ -292,6 +408,7 @@ function updatePlayerStatusList() {
           <span>${p.seat}号 ${p.name}</span>
           ${isCurrent ? '<span>(你)</span>' : ''}
           ${p.disconnected ? '<span style="color:#888;font-size:11px;">[断线]</span>' : ''}
+          ${p.isAi ? '<span style="color:#888;font-size:11px;">[AI]</span>' : ''}
         </div>
       `;
     }).join('');
@@ -304,6 +421,7 @@ function updateActionPanel(phase) {
 
   switch (phase) {
     case 'free_speech':
+    case 'tie_speech':
       if (isAlive && _currentSpeakerSeat === currentSeat) {
         panel.innerHTML = `
           <div class="speech-area">
@@ -324,12 +442,35 @@ function updateActionPanel(phase) {
       }
       break;
 
+    case 'dawn_death_announce':
+      if (currentPlayerId === currentHostId) {
+        panel.innerHTML = `
+          <div style="text-align:center;padding:16px;">
+            <p style="font-size:15px;margin-bottom:16px;color:#666;">📋 结果已公示，请开始讨论</p>
+            <button class="btn btn-primary" onclick="socket.emit('start_free_speech')">开始讨论</button>
+          </div>
+        `;
+      } else {
+        panel.innerHTML = `<p class="waiting-text">⏳ 等待主持人开始讨论...</p>`;
+      }
+      break;
+
     case 'vote':
+    case 'tie_vote':
       if (isAlive) {
-        const targets = _cachedPlayers.filter(p => p.isAlive && p.seat !== currentSeat);
+        let targets;
+        let title;
+        if (phase === 'tie_vote' && _tiedSeats.length) {
+          // 同票重投：只显示候选人
+          targets = _cachedPlayers.filter(p => _tiedSeats.includes(p.seat) && p.seat !== currentSeat);
+          title = `🗳️ 请投票 - 在 ${_tiedSeats.map(s => s + '号').join('、')} 中选择`;
+        } else {
+          targets = _cachedPlayers.filter(p => p.isAlive && p.seat !== currentSeat);
+          title = '🗳️ 请投票';
+        }
         panel.innerHTML = `
           <div class="vote-area">
-            <div class="vote-title">🗳️ 请投票 - 选择你怀疑的玩家</div>
+            <div class="vote-title">${title}</div>
             <div class="vote-targets" id="vote-targets">
               ${targets.map(t => `
                 <button class="vote-target" data-seat="${t.seat}"
@@ -337,10 +478,10 @@ function updateActionPanel(phase) {
                   ${t.seat}号 ${t.name}
                 </button>
               `).join('')}
-              <button class="vote-target" data-seat="0"
+              ${phase === 'tie_vote' ? `<button class="vote-target" data-seat="0"
                 onclick="castVote(0)" style="color:#888;">
                 弃权
-              </button>
+              </button>` : ''}
             </div>
           </div>
         `;
@@ -352,7 +493,6 @@ function updateActionPanel(phase) {
     case 'night_werewolf':
     case 'night_seer':
     case 'night_witch':
-    case 'night_hunter':
       renderNightAction(phase, panel);
       break;
 
@@ -432,18 +572,6 @@ function renderNightAction(phase, panel) {
       }, 100);
       break;
 
-    case 'night_hunter':
-      panel.innerHTML = `
-        <div class="night-area">
-          <div class="night-title">🔫 猎人行动</div>
-          <p class="skill-name">选择要带走的玩家</p>
-          <select id="night-target">
-            ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
-          </select>
-          <button class="btn-confirm" onclick="submitNightAction('shoot')">确认带走</button>
-        </div>
-      `;
-      break;
   }
 }
 
@@ -455,17 +583,18 @@ function isCurrentPlayerAlive() {
 // ========== 阶段文本 ==========
 function getPhaseText(phase) {
   const map = {
-    'night_werewolf': '🌙 黑夜 - 狼人行动',
-    'night_seer': '🌙 黑夜 - 预言家查验',
-    'night_witch': '🌙 黑夜 - 女巫行动',
-    'night_hunter': '🌙 黑夜 - 猎人行动',
-    'dawn_death_announce': '🌅 天亮 - 死讯公告',
-    'last_words': '💀 遗言',
-    'free_speech': '🗣️ 自由发言',
-    'vote': '🗳️ 投票',
-    'vote_result': '📊 投票结果',
-    'final_words': '💀 出局遗言',
-    'settlement': '🏆 游戏结束'
+    'night_werewolf': '🌙 夜间·决策',
+    'night_seer': '🌙 夜间·情报',
+    'night_witch': '🌙 夜间·行动',
+    'dawn_death_announce': '📋 结果公示',
+    'last_words': '📝 陈述',
+    'free_speech': '💬 讨论阶段',
+    'vote': '📊 表决阶段',
+    'vote_result': '📊 表决结果',
+    'tie_speech': '💬 候选人发言',
+    'tie_vote': '📊 再次表决',
+    'final_words': '📝 陈述',
+    'settlement': '🏁 结算'
   };
   return map[phase] || phase;
 }
@@ -476,8 +605,8 @@ function getRoleName(role) {
 }
 
 function getRoleColor(role) {
-  const map = { werewolf: '#ff6b6b', seer: '#60a5fa', witch: '#a78bfa', hunter: '#fb923c', villager: '#4ade80' };
-  return map[role] || '#ccc';
+  const map = { werewolf: '#ff4d4f', seer: '#1890ff', witch: '#722ed1', hunter: '#fa8c16', villager: '#52c41a' };
+  return map[role] || '#999';
 }
 
 // ========== 全局函数（供 HTML onclick 调用） ==========
@@ -486,6 +615,9 @@ function sendSpeech() {
   if (!input || !input.value.trim()) return;
   socket.emit('player_speech', { content: input.value.trim() });
   input.value = '';
+  // 发言后自动结束自己的回合
+  socket.emit('end_speech');
+  addMessage('system', '✓ 发言已发送');
 }
 
 function endSpeech() {

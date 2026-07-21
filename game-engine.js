@@ -24,6 +24,7 @@ class GameEngine {
     this.nightActions = {};
     this.witchUsedSave = false;
     this.witchUsedKill = false;
+    this.hunterUsedAbility = false;  // 猎人是否已使用被动技能
   }
 
   // 分配角色
@@ -58,6 +59,12 @@ class GameEngine {
     return { roleList, players };
   }
 
+  // 获取已死亡但未使用技能的猎人（被动：死亡后可带走一人）
+  getPendingHunter() {
+    return Array.from(this.room.players.values())
+      .find(p => p.role === roles.HUNTER && !p.isAlive && !this.hunterUsedAbility) || null;
+  }
+
   // 获取某玩家角色
   getPlayerRole(socketId) {
     const player = this.room.players.get(socketId);
@@ -70,17 +77,24 @@ class GameEngine {
       .filter(p => p.role === roles.WEREWOLF);
   }
 
-  // 检查胜负
+  // 检查胜负（9人局：3狼/1预言家/1女巫/1猎人/3平民）
   checkGameEnd() {
     const alivePlayers = Array.from(this.room.players.values()).filter(p => p.isAlive);
     const aliveWerewolves = alivePlayers.filter(p => p.role === roles.WEREWOLF);
-    const aliveGood = alivePlayers.filter(p => p.role !== roles.WEREWOLF);
+    const aliveVillagers = alivePlayers.filter(p => p.role === roles.VILLAGER);
+    const aliveGods = alivePlayers.filter(p => p.role === roles.SEER || p.role === roles.WITCH || p.role === roles.HUNTER);
 
+    // 三狼全出局 → 好人胜利
     if (aliveWerewolves.length === 0) {
-      return { ended: true, winner: 'good', message: '所有狼人已被消灭，好人阵营获胜！' };
+      return { ended: true, winner: 'good', message: '好人胜利' };
     }
-    if (aliveWerewolves.length >= aliveGood.length) {
-      return { ended: true, winner: 'werewolf', message: '狼人人数与好人均等，狼人阵营获胜！' };
+    // 三平民全死 → 狼人胜利
+    if (aliveVillagers.length === 0) {
+      return { ended: true, winner: 'werewolf', message: '狼人胜利' };
+    }
+    // 三神全死 → 狼人胜利
+    if (aliveGods.length === 0) {
+      return { ended: true, winner: 'werewolf', message: '狼人胜利' };
     }
     return { ended: false };
   }
@@ -106,26 +120,27 @@ class GameEngine {
     return this.phase;
   }
 
-  // 进入夜间下一角色阶段
+  // 进入夜间下一角色阶段（猎人已移除主动阶段，改为死亡触发）
   advanceNight() {
-    const nightOrder = ['night_werewolf', 'night_seer', 'night_witch', 'night_hunter'];
+    const nightOrder = ['night_werewolf', 'night_seer', 'night_witch'];
+    const prevPhase = this.phase;
     const idx = nightOrder.indexOf(this.phase);
     if (idx < nightOrder.length - 1) {
       this.phase = nightOrder[idx + 1];
-      return { phase: this.phase, isNight: true };
+      return { phase: this.phase, isNight: true, prevPhase };
     }
     // 夜间结束，进入白天
-    return this.startDay();
+    return this.startDay(prevPhase);
   }
 
   // 进入白天
-  startDay() {
+  startDay(prevPhase) {
     this.phase = 'dawn_death_announce';
     this.votes = {};
     // 计算死者
     const deaths = this.calculateDeaths();
-    this.addLog('death', `昨晚 ${deaths.length > 0 ? deaths.map(d => `${d.seat}号 ${d.name}`).join('、') : '没有人'}死亡`);
-    return { phase: this.phase, deaths, isDay: true };
+    this.addLog('death', `昨晚 ${deaths.length > 0 ? deaths.map(d => `${d.seat}号 ${d.name}`).join('、') : '平安夜'}死亡`);
+    return { phase: this.phase, deaths, isDay: true, prevPhase };
   }
 
   // 计算死者（处理女巫解救和毒杀）
@@ -190,12 +205,16 @@ class GameEngine {
   startVote() {
     this.phase = 'vote';
     this.votes = {};
+    // 重置所有玩家的投票状态
+    this.room.players.forEach(p => { p.hasVoted = false; p.voteTarget = null; });
     this.addLog('system', '请所有存活玩家投票');
     return { phase: this.phase };
   }
 
   // 执行投票结果
   executeVote() {
+    // 原始投票数据（seat → targetSeat）
+    const rawVotes = { ...this.votes };
     // 统计票数
     const tally = {};
     Object.values(this.votes).forEach(target => {
@@ -208,14 +227,15 @@ class GameEngine {
 
     if (!maxTarget || maxVotes === 0) {
       this.addLog('system', '无人被放逐（全部弃权）');
-      return { phase: 'free_speech', eliminated: null, isTie: true };
+      return { phase: 'free_speech', eliminated: null, isTie: true, rawVotes, tally };
     }
 
     // 检测平票：是否有多个候选人获得相同最高票数
     const topCandidates = Object.entries(tally).filter(([_, count]) => count === maxVotes);
     if (topCandidates.length > 1) {
       this.addLog('system', `无人被放逐（平票）`);
-      return { phase: 'free_speech', eliminated: null, isTie: true };
+      const tiedSeats = topCandidates.map(([s]) => parseInt(s));
+      return { phase: 'tie', eliminated: null, isTie: true, tiedSeats, rawVotes, tally };
     }
 
     const eliminated = Array.from(this.room.players.values()).find(p => p.seat === maxTarget);
@@ -223,9 +243,42 @@ class GameEngine {
       eliminated.isAlive = false;
       this.addLog('system', `${eliminated.seat}号 ${eliminated.name} 被放逐`);
       this.phase = 'final_words';
-      return { phase: 'final_words', eliminated: { seat: eliminated.seat, name: eliminated.name } };
+      return { phase: 'final_words', eliminated: { seat: eliminated.seat, name: eliminated.name }, rawVotes, tally };
     }
-    return { phase: 'free_speech', eliminated: null };
+    return { phase: 'free_speech', eliminated: null, rawVotes, tally };
+  }
+
+  // === 同票处理 ===
+
+  // 开始同票候选人发言
+  startTieBreak(tiedSeats) {
+    this.phase = 'tie_speech';
+    this.tieOrder = [...tiedSeats];
+    this.currentTieSpeaker = 0;
+    this.speechStartTime = Date.now();
+    this.addLog('system', `同票候选人发言：${tiedSeats.map(s => s + '号').join('、')}`);
+    return { speaker: this.tieOrder[0] };
+  }
+
+  // 同票发言人下一位
+  nextTieSpeaker() {
+    this.currentTieSpeaker++;
+    if (this.currentTieSpeaker < this.tieOrder.length) {
+      this.speechStartTime = Date.now();
+      return { phase: 'tie_speech', speaker: this.tieOrder[this.currentTieSpeaker] };
+    }
+    // 所有候选人发言完毕，开始重新投票
+    return this.startTieVote();
+  }
+
+  // 开始重新投票
+  startTieVote() {
+    this.phase = 'tie_vote';
+    this.votes = {};
+    this.tieVotes = {};
+    // 重置所有玩家的投票状态
+    this.room.players.forEach(p => { p.hasVoted = false; p.voteTarget = null; });
+    return { phase: 'tie_vote' };
   }
 
   // 遗言结束，进入下一夜或结算
