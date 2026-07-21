@@ -430,13 +430,23 @@ function handleVoteResult(room, io, result) {
     setTimeout(() => {
       const next = room.game.afterFinalWords();
       if (next.phase === 'settlement') {
-        io.to(room.id).emit('game_over', {
-          winner: next.winner,
-          message: next.message,
-          roles: Array.from(room.players.values()).map(p => ({
-            seat: p.seat, name: p.name, role: p.role
-          }))
+        const rolesInfo = Array.from(room.players.values()).map(p => ({
+          seat: p.seat,
+          name: p.name,
+          role: p.role
+        }));
+
+        room.players.forEach((player) => {
+          const isGood = player.role !== 'werewolf';
+          const playerWon = (next.winner === 'good' && isGood) || (next.winner === 'werewolf' && !isGood);
+          io.to(player.id).emit('game_over', {
+            winner: next.winner,
+            message: next.message,
+            youWon: playerWon,
+            roles: rolesInfo
+          });
         });
+
         room.status = 'ended';
       } else {
         handleNightPhase(room, io, next);
