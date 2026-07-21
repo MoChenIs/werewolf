@@ -55,6 +55,9 @@ io.on('connection', (socket) => {
     const result = roomManager.leaveRoom(socket.id);
     if (result && result.action === 'left') {
       io.to(result.roomId).emit('player_left', { seat: result.seat });
+      if (result.newHost) {
+        io.to(result.roomId).emit('host_changed', { newHost: result.newHost });
+      }
     }
   });
 });

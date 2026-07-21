@@ -29,8 +29,13 @@ console.assert(leaveResult.action === 'left', '离开玩家应返回 left');
 console.assert(leaveResult.seat === 2, '应返回离开者的座位号');
 console.log('✓ 离开房间测试通过');
 
-// 测试房间销毁
-rm.leaveRoom('socket-1');
-console.log('✓ 所有玩家离开后房间应被销毁');
+// 测试房间销毁 - 移除所有剩余玩家
+for (let i = 3; i <= 12; i++) {
+  rm.leaveRoom(`socket-${i}`);
+}
+const destroyResult = rm.leaveRoom('socket-1');
+console.assert(destroyResult.action === 'destroyed', '所有玩家离开后房间应被销毁');
+console.assert(rm.rooms.size === 0, 'rooms Map 应清空');
+console.log('✓ 房间销毁测试通过');
 
 console.log('\n所有 RoomManager 测试通过!');
