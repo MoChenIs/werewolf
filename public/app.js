@@ -300,6 +300,26 @@ socket.on('night_teammates', (data) => {
   }
 });
 
+// 狼人投票实时更新
+socket.on('werewolf_vote', (data) => {
+  // 更新投票展示区
+  const voteList = document.getElementById('werewolf-votes');
+  if (!voteList) return;
+  const nameMap = {};
+  _cachedPlayers.forEach(p => { nameMap[p.seat] = p.name; });
+  const lines = Object.entries(data.votes).map(([voter, target]) => {
+    if (target === undefined) return null;
+    return `${voter}号 → ${target}号 ${nameMap[target] || ''}`;
+  }).filter(Boolean);
+  voteList.innerHTML = lines.join('<br>');
+});
+
+// 狼人意见不统一，重新投票
+socket.on('werewolf_disagree', () => {
+  addMessage('system', '⚠️ 意见不统一，请狼人重新选择目标');
+  document.getElementById('werewolf-votes').innerHTML = '';
+});
+
 // 夜间行动结果
 socket.on('night_result', (data) => {
   addMessage('private', `🔔 ${data.message}`);
@@ -531,12 +551,16 @@ function renderNightAction(phase, panel) {
     case 'night_werewolf':
       panel.innerHTML = `
         <div class="night-area">
-          <div class="night-title">🐺 狼人行动</div>
+          <div class="night-title">🐺 狼人投票</div>
           <p class="skill-name">选择今晚要击杀的玩家</p>
           <select id="night-target">
             ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
           </select>
-          <button class="btn-confirm" onclick="submitNightAction('kill')">确认击杀</button>
+          <button class="btn-confirm" onclick="submitNightAction('kill')">投票</button>
+          <div style="margin-top:12px;padding:8px;background:#f5f7fa;border-radius:4px;font-size:13px;color:#666;">
+            <div style="font-weight:600;margin-bottom:4px;">🗳️ 投票结果</div>
+            <div id="werewolf-votes">等待投票...</div>
+          </div>
         </div>
       `;
       break;

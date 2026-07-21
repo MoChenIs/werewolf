@@ -22,6 +22,7 @@ class GameEngine {
     this.history = [];
     this.votes = {};             // seat -> targetSeat
     this.nightActions = {};
+    this.werewolfVotes = {};    // seat → targetSeat，狼人投票记录
     this.witchUsedSave = false;
     this.witchUsedKill = false;
     this.hunterUsedAbility = false;  // 猎人是否已使用被动技能

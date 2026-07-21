@@ -128,18 +128,19 @@ io.on('connection', (socket) => {
       io.to(w.id).emit('night_teammates', { teammates: werewolfSeats.filter(t => t.seat !== w.seat) });
     });
 
-    // 通知狼人行动（修正：补上 isYou 标记）
-    const firstWerewolf = werewolves[0];
-    if (firstWerewolf) {
-      io.to(firstWerewolf.id).emit('your_turn', {
-        seat: firstWerewolf.seat,
+    // 通知所有狼人投票选择目标
+    const targets = Array.from(room.players.values()).filter(p => p.isAlive).map(p => ({ seat: p.seat, name: p.name }));
+    engine.werewolfVotes = {};
+    werewolves.forEach(w => {
+      io.to(w.id).emit('your_turn', {
+        seat: w.seat,
         action: 'night_kill',
         isYou: true,
-        targets: Array.from(room.players.values()).filter(p => p.isAlive).map(p => ({ seat: p.seat, name: p.name }))
+        targets
       });
-    }
+    });
 
-    // AI 狼人自动行动，确保不卡流程
+    // AI 狼人自动投票，确保不卡流程
     autoProcessAiNight(room, io);
   });
 
@@ -263,12 +264,69 @@ io.on('connection', (socket) => {
     switch (action) {
       case 'kill':
         result = processWerewolfAction(engine, socket.id, target);
-        if (result.success) {
-          const werewolves = engine.getWerewolves().filter(w => w.isAlive);
-          werewolves.forEach(w => {
-            io.to(w.id).emit('night_result', { message: `已确认决策，目标 ${result.target}号` });
+        if (!result.success) break;
+
+        const voter = engine.room.players.get(socket.id);
+        if (!voter) break;
+
+        // 记录狼人投票（AI 狼人自动投随机目标）
+        engine.werewolfVotes[voter.seat] = target;
+        const aliveWerewolves = engine.getWerewolves().filter(w => w.isAlive);
+        const totalWolves = aliveWerewolves.length;
+
+        // AI 狼人自动补齐投票
+        const nonWolfTargets = Array.from(room.players.values()).filter(p => p.isAlive && p.role !== 'werewolf');
+        aliveWerewolves.forEach(w => {
+          if (w.isAi && engine.werewolfVotes[w.seat] === undefined) {
+            const pick = nonWolfTargets.length > 0
+              ? nonWolfTargets[Math.floor(Math.random() * nonWolfTargets.length)].seat
+              : 0;
+            engine.werewolfVotes[w.seat] = pick;
+          }
+        });
+
+        const votedCount = Object.keys(engine.werewolfVotes).length;
+
+        // 广播投票给其他狼人
+        aliveWerewolves.forEach(w => {
+          io.to(w.id).emit('werewolf_vote', {
+            votes: { ...engine.werewolfVotes },
+            voter: voter.seat,
+            target
           });
-          handleNightPhase(room, io, engine.advanceNight());
+        });
+
+        // 所有狼人都投票了，统计结果
+        if (votedCount >= totalWolves) {
+          const tally = {};
+          Object.values(engine.werewolfVotes).forEach(t => {
+            if (t) tally[t] = (tally[t] || 0) + 1;
+          });
+
+          const maxVotes = Math.max(...Object.values(tally), 0);
+          const topTargets = Object.entries(tally).filter(([_, c]) => c === maxVotes);
+
+          if (topTargets.length === 1 && maxVotes >= Math.ceil(totalWolves / 2)) {
+            // 多数决：击杀目标
+            engine.nightActions.werewolfKill = parseInt(topTargets[0][0]);
+            aliveWerewolves.forEach(w => {
+              io.to(w.id).emit('night_result', { message: `已确认击杀 ${topTargets[0][0]}号` });
+            });
+            engine.werewolfVotes = {};
+            handleNightPhase(room, io, engine.advanceNight());
+          } else if (topTargets.length >= totalWolves) {
+            // 全部分歧：统一意见
+            engine.werewolfVotes = {};
+            aliveWerewolves.forEach(w => {
+              io.to(w.id).emit('werewolf_disagree');
+            });
+          } else {
+            // 平票（如 4狼 2:2）：重新投票
+            engine.werewolfVotes = {};
+            aliveWerewolves.forEach(w => {
+              io.to(w.id).emit('werewolf_disagree');
+            });
+          }
         }
         break;
       case 'investigate':
