@@ -259,7 +259,7 @@ socket.on('game_over', (data) => {
  <span>${r.seat}号 ${r.name}</span>
  <span style="color:${getRoleColor(r.role)}">${getRoleName(r.role)}</span>
  </div>
- `).join()}
+ `).join('')}
  </div>
  <div style="display:flex;gap:8px;margin-top:14px;">
  <button class="btn btn-primary" style="flex:1;" onclick="playAgain()">重新开始</button>
@@ -361,7 +361,7 @@ socket.on('hunter_activate', (data) => {
  <button class="vote-target" onclick="hunterShoot(${t.seat})">
  ${t.seat}号 ${t.name}
  </button>
- `).join()}
+ `).join('')}
  <button class="vote-target" onclick="hunterShoot(0)" style="color:#999;">
  放弃
  </button>
@@ -399,7 +399,7 @@ function updatePlayerList(players) {
  ${p.isHost ? '<span class="host-badge">管理员</span>' : ''}
  ${p.isAi ? '<span class="ai-badge">AI</span>' : ''}
  </div>
- `).join();
+ `).join('');
 }
 
 function updatePlayerCount(count, max) {
@@ -445,7 +445,7 @@ function updatePlayerStatusList() {
  ${p.isAi ? '<span style="color:#888;font-size:11px;">[AI]</span>' : ''}
  </div>
  `;
- }).join();
+ }).join('');
 }
 
 // ========== 操作面板管理 ==========
@@ -511,7 +511,7 @@ function updateActionPanel(phase) {
  onclick="castVote(${t.seat})">
  ${t.seat}号 ${t.name}
  </button>
- `).join()}
+ `).join('')}
  ${phase === 'tie_vote' ? `<button class="vote-target" data-seat="0"
  onclick="castVote(0)" style="color:#888;">
  弃权
@@ -552,7 +552,7 @@ function renderNightAction(phase, panel) {
  <div class="night-title"> 小组投票</div>
  <p class="skill-name">选择待处理成员</p>
  <select id="night-target">
- ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join()}
+ ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
  </select>
  <button class="btn-confirm" onclick="submitNightAction('kill')">投票</button>
  <div style="margin-top:12px;padding:8px;background:#f5f7fa;border-radius:4px;font-size:13px;color:#666;">
@@ -569,7 +569,7 @@ function renderNightAction(phase, panel) {
  <div class="night-title"> 信息查询</div>
  <p class="skill-name">选择查询对象</p>
  <select id="night-target">
- ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join()}
+ ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
  </select>
  <button class="btn-confirm" onclick="submitNightAction('investigate')">确认查询</button>
  </div>
@@ -591,7 +591,7 @@ function renderNightAction(phase, panel) {
  <div id="witch-kill-target-wrapper" class="hidden" style="margin-bottom:8px;">
  <p class="skill-name">选择目标成员</p>
  <select id="night-target">
- ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join()}
+ ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
  </select>
  </div>
  </div>
