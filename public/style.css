@@ -220,9 +220,9 @@ body {
 
 /* 游戏结束 */
 .game-over-panel { text-align: center; padding: 14px; }
-.game-over-panel h2 { font-size: 18px; margin-bottom: 10px; }
-.game-over-panel .role-list { display: flex; flex-direction: column; gap: 3px; margin: 10px 0; }
-.game-over-panel .role-item {
-  padding: 4px 8px; background: var(--bg); border-radius: var(--radius-sm); font-size: 12px;
-  display: flex; justify-content: space-between; border: 1px solid var(--border);
+.role-tags { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin: 6px 0; }
+.role-tag {
+  padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px;
+  font-size: 12px; display: inline-flex; gap: 6px; background: var(--card);
+  white-space: nowrap;
 }

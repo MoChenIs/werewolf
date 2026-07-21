@@ -1026,7 +1026,6 @@ function checkAndHandleGameEnd(room, io) {
 
 function restartGame(room) {
  room.playAgainVotes = null;
- room.status = 'waiting';
  room.players.forEach(p => {
  p.isAlive = true;
  p.role = null;
@@ -1037,9 +1036,37 @@ function restartGame(room) {
  p.warnings = 0;
  });
  room.seatCount = room.players.size;
- room.game = null;
+ room.status = 'playing';
 
- io.to(room.id).emit('room_joined', roomManager.getRoomInfo(room));
+ // 直接开始新游戏，无需回房间页
+ const engine = new GameEngine(room);
+ room.game = engine;
+ engine.startGame();
+
+ room.players.forEach((player) => {
+ io.to(player.id).emit('game_started', { role: player.role });
+ });
+
+ io.to(room.id).emit('phase_change', {
+ phase: 'night_werewolf',
+ message: ' 狼人行动中'
+ });
+
+ const werewolves = engine.getWerewolves();
+ const werewolfSeats = werewolves.map(w => ({ seat: w.seat, name: w.name }));
+ werewolves.forEach(w => {
+ io.to(w.id).emit('night_teammates', { teammates: werewolfSeats.filter(t => t.seat !== w.seat) });
+ });
+
+ const targets = Array.from(room.players.values()).filter(p => p.isAlive).map(p => ({ seat: p.seat, name: p.name }));
+ engine.werewolfVotes = {};
+ werewolves.forEach(w => {
+ io.to(w.id).emit('your_turn', {
+ seat: w.seat, action: 'night_kill', isYou: true, targets
+ });
+ });
+
+ autoProcessAiNight(room, io);
 }
 
 // ========== 猎人被动技能 ==========

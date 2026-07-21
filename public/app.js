@@ -241,24 +241,16 @@ socket.on('vote_result', (data) => {
 // 游戏结束
 socket.on('game_over', (data) => {
  if (gameTimer) gameTimer.stop();
- const myRole = sessionStorage.getItem('werewolf_role');
- const isGood = myRole !== 'werewolf';
- const isWinner = (data.winner === 'good' && isGood) || (data.winner === 'werewolf' && !isGood);
 
  const panel = document.getElementById('action-panel');
  panel.innerHTML = `
  <div class="game-over-panel">
- <h2 style="color:${isWinner ? '#52c41a' : '#ff4d4f'};">
- ${isWinner ? ' 通过' : ' 未通过'}
- </h2>
- <p style="color:#666;margin-bottom:14px;">${data.message}</p>
- <h3 style="margin-bottom:10px;color:#999;font-size:13px;font-weight:400;">成员列表</h3>
- <div class="role-list">
+ <div class="role-tags">
  ${data.roles.sort((a,b) => a.seat - b.seat).map(r => `
- <div class="role-item" style="${r.seat === currentSeat ? 'border-color:#1890ff;background:#e6f7ff;' : ''}">
- <span>${r.seat}号 ${r.name}</span>
+ <span class="role-tag" style="${r.seat === currentSeat ? 'border-color:var(--primary);background:var(--primary-light);' : ''}">
+ ${r.seat}号 ${r.name}
  <span style="color:${getRoleColor(r.role)}">${getRoleName(r.role)}</span>
- </div>
+ </span>
  `).join('')}
  </div>
  <div style="display:flex;gap:8px;margin-top:14px;">
@@ -270,7 +262,6 @@ socket.on('game_over', (data) => {
  `;
 
  addMessage('result', `${data.message}`);
- addMessage('result', `${data.winner === 'good' ? '方案通过' : '方案未通过'}`);
 
  sessionStorage.removeItem('werewolf_seat');
  sessionStorage.removeItem('werewolf_room');
