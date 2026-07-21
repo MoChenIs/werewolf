@@ -142,7 +142,7 @@ socket.on('game_started', ({ role }) => {
  // 清空旧聊天记录
  document.getElementById('feed-messages').innerHTML = '';
  showPage('game-page');
- addMessage('system', `游戏开始！你的身份是：${getRoleName(role)}`);
+ addMessage('system', `会议开始！你的角色：${getRoleName(role)}`);
  // 缓存自己的角色到 sessionStorage
  sessionStorage.setItem('werewolf_role', role);
 });
@@ -210,7 +210,7 @@ socket.on('vote_update', (data) => {
  addMessage('system', `${data.seat}号已表决 (${data.totalVoters}/${data.totalAlive})`);
 });
 
-// 投票结果（含详细投票记录）
+// 表决结果（含详细投票记录）
 socket.on('vote_result', (data) => {
  const nameMap = {};
  _cachedPlayers.forEach(p => { nameMap[p.seat] = p.name; });
@@ -234,7 +234,7 @@ socket.on('vote_result', (data) => {
  });
  addMessage('system', `表决结果：\n${lines.join('\n')}`);
  if (data.isTie && data.tiedSeats.length) {
- addMessage('system', `同票：${data.tiedSeats.map(s => s + '号 ' + (nameMap[s] || '')).join('、')}`);
+ addMessage('system', `平票：${data.tiedSeats.map(s => s + '号 ' + (nameMap[s] || '')).join('、')}`);
  }
 });
 
@@ -249,10 +249,10 @@ socket.on('game_over', (data) => {
  panel.innerHTML = `
  <div class="game-over-panel">
  <h2 style="color:${isWinner ? '#52c41a' : '#ff4d4f'};">
- ${isWinner ? ' 胜利' : ' 失败'}
+ ${isWinner ? ' 通过' : ' 未通过'}
  </h2>
  <p style="color:#666;margin-bottom:14px;">${data.message}</p>
- <h3 style="margin-bottom:10px;color:#999;font-size:13px;font-weight:400;">成员信息</h3>
+ <h3 style="margin-bottom:10px;color:#999;font-size:13px;font-weight:400;">成员列表</h3>
  <div class="role-list">
  ${data.roles.sort((a,b) => a.seat - b.seat).map(r => `
  <div class="role-item" style="${r.seat === currentSeat ? 'border-color:#1890ff;background:#e6f7ff;' : ''}">
@@ -262,43 +262,43 @@ socket.on('game_over', (data) => {
  `).join()}
  </div>
  <div style="display:flex;gap:8px;margin-top:14px;">
- <button class="btn btn-primary" style="flex:1;" onclick="playAgain()">再来一局</button>
- <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="location.reload()">返回大厅</button>
+ <button class="btn btn-primary" style="flex:1;" onclick="playAgain()">重新开始</button>
+ <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="location.reload()">返回工作台</button>
  </div>
  <div id="play-again-status" style="margin-top:8px;font-size:12px;color:#999;"></div>
  </div>
  `;
 
  addMessage('result', `${data.message}`);
- addMessage('result', `${data.winner === 'good' ? '好人胜利' : '狼人胜利'}`);
+ addMessage('result', `${data.winner === 'good' ? '方案通过' : '方案未通过'}`);
 
  sessionStorage.removeItem('werewolf_seat');
  sessionStorage.removeItem('werewolf_room');
  sessionStorage.removeItem('werewolf_role');
 });
 
-// 再来一局计数
+// 重新开始计数
 socket.on('play_again_count', (data) => {
  const el = document.getElementById('play-again-status');
- if (el) el.textContent = `等待其他玩家同意 (${data.count}/${data.total})`;
+ if (el) el.textContent = `等待其他成员确认 (${data.count}/${data.total})`;
 });
 
 function playAgain() {
  socket.emit('play_again');
  const el = document.getElementById('play-again-status');
- if (el) el.textContent = '已同意，等待其他玩家...';
+ if (el) el.textContent = '已确认，等待其他成员...';
 }
 
 // 夜间队友信息
 socket.on('night_teammates', (data) => {
  if (data.teammates && data.teammates.length > 0) {
- addMessage('private', ` 你的狼队友：${data.teammates.map(t => `${t.seat}号 ${t.name}`).join('、')}`);
+ addMessage('private', ` 同组：${data.teammates.map(t => `${t.seat}号 ${t.name}`).join('、')}`);
  } else {
- addMessage('private', ' 你是独狼，没有队友');
+ addMessage('private', ' 无同组人员');
  }
 });
 
-// 狼人投票实时更新
+// 小组投票实时更新
 socket.on('werewolf_vote', (data) => {
  // 更新投票展示区
  const voteList = document.getElementById('werewolf-votes');
@@ -314,7 +314,7 @@ socket.on('werewolf_vote', (data) => {
 
 // 狼人意见不统一，重新投票
 socket.on('werewolf_disagree', () => {
- addMessage('system', ' 意见不统一，请狼人重新选择目标');
+ addMessage('system', ' 意见不统一，请重新选择');
  document.getElementById('werewolf-votes').innerHTML = '';
 });
 
@@ -328,9 +328,9 @@ socket.on('witch_info', (data) => {
  const infoEl = document.getElementById('witch-info');
  if (!infoEl) return;
  if (data.tonightKilled) {
- infoEl.innerHTML = `今晚被狼人击杀的是 <strong>${data.tonightKilled.seat}号 ${data.tonightKilled.name}</strong>`;
+ infoEl.innerHTML = `被处理的是 <strong>${data.tonightKilled.seat}号 ${data.tonightKilled.name}</strong>`;
  } else {
- infoEl.innerHTML = '今晚无人被狼人击杀';
+ infoEl.innerHTML = '今晚无人被处理';
  }
  if (document.getElementById('witch-use-save')) {
  document.getElementById('witch-use-save').disabled = !data.hasSave;
@@ -340,22 +340,22 @@ socket.on('witch_info', (data) => {
  }
 });
 
-// 猎人被动：死亡后选择带走目标
+// 安全组被动：死亡后选择带走目标
 socket.on('hunter_activate', (data) => {
  if (data.expired) {
- addMessage('system', ' 猎人技能超时');
+ addMessage('system', ' 技能超时');
  return;
  }
  const panel = document.getElementById('action-panel');
  const targets = data.targets || [];
  if (!targets.length) {
- addMessage('system', ' 无目标可带走');
+ addMessage('system', ' 无候选目标');
  return;
  }
  panel.innerHTML = `
  <div class="night-area">
- <div class="night-title"> 选择带走目标</div>
- <p class="skill-name">你已出局，可以带走一名玩家</p>
+ <div class="night-title"> 选择交接成员</div>
+ <p class="skill-name">已离线，可指定一名交接成员</p>
  <div class="vote-targets">
  ${targets.map(t => `
  <button class="vote-target" onclick="hunterShoot(${t.seat})">
@@ -372,7 +372,7 @@ socket.on('hunter_activate', (data) => {
 
 function hunterShoot(targetSeat) {
  socket.emit('hunter_shoot', { targetSeat });
- addMessage('system', targetSeat > 0 ? ` 已选择带走 ${targetSeat}号` : ' 放弃技能');
+ addMessage('system', targetSeat > 0 ? ` 已指定 ${targetSeat}号` : ' 放弃');
  document.getElementById('action-panel').innerHTML = '<p class="waiting-text"> 等待继续...</p>';
 }
 
@@ -386,7 +386,7 @@ socket.on('player_disconnected', (data) => {
 });
 
 socket.on('player_reconnected', (data) => {
- addMessage('system', ` ${data.seat}号玩家重新连接`);
+ addMessage('system', ` ${data.seat}号成员重新连接`);
  updatePlayerStatusList();
 });
 
@@ -396,7 +396,7 @@ function updatePlayerList(players) {
  <div class="player-card">
  <span class="seat">#${p.seat}</span>
  <span>${p.name}</span>
- ${p.isHost ? '<span class="host-badge">房主</span>' : ''}
+ ${p.isHost ? '<span class="host-badge">管理员</span>' : ''}
  ${p.isAi ? '<span class="ai-badge">AI</span>' : ''}
  </div>
  `).join();
@@ -459,8 +459,8 @@ function updateActionPanel(phase) {
  if (isAlive && _currentSpeakerSeat === currentSeat) {
  panel.innerHTML = `
  <div class="speech-area">
- <div class="speech-label"> 你的发言（90秒）</div>
- <textarea id="speech-input" placeholder="输入你的发言内容..." maxlength="200"></textarea>
+ <div class="speech-label"> 发表意见</div>
+ <textarea id="speech-input" placeholder="输入意见内容..." maxlength="200"></textarea>
  <div class="speech-actions">
  <button class="btn btn-send" onclick="sendSpeech()">发送</button>
  <button class="btn btn-end" onclick="exitGame()">退出房间</button>
@@ -497,10 +497,10 @@ function updateActionPanel(phase) {
  if (phase === 'tie_vote' && _tiedSeats.length) {
  // 同票重投：只显示候选人
  targets = _cachedPlayers.filter(p => _tiedSeats.includes(p.seat) && p.seat !== currentSeat);
- title = ` 请投票 - 在 ${_tiedSeats.map(s => s + '号').join('、')} 中选择`;
+ title = ` 请表决 - 在 ${_tiedSeats.map(s => s + '号').join('、')} 中选择`;
  } else {
  targets = _cachedPlayers.filter(p => p.isAlive && p.seat !== currentSeat);
- title = ' 请投票';
+ title = ' 请表决';
  }
  panel.innerHTML = `
  <div class="vote-area">
@@ -520,7 +520,7 @@ function updateActionPanel(phase) {
  </div>
  `;
  } else {
- panel.innerHTML = `<p class="waiting-text"> 存活玩家正在投票...</p>`;
+ panel.innerHTML = `<p class="waiting-text"> 成员正在表决...</p>`;
  }
  break;
 
@@ -531,7 +531,7 @@ function updateActionPanel(phase) {
  break;
 
  default:
- panel.innerHTML = `<p class="waiting-text"> 请等待其他玩家行动...</p>`;
+ panel.innerHTML = `<p class="waiting-text"> 请等待其他成员操作...</p>`;
  }
 }
 
@@ -539,7 +539,7 @@ function renderNightAction(phase, panel) {
  const isMyPhase = _myNightPhase === phase;
 
  if (!isMyPhase) {
- panel.innerHTML = `<p class="waiting-text"> 等待其他玩家行动...</p>`;
+ panel.innerHTML = `<p class="waiting-text"> 等待其他成员操作...</p>`;
  return;
  }
 
@@ -549,15 +549,15 @@ function renderNightAction(phase, panel) {
  case 'night_werewolf':
  panel.innerHTML = `
  <div class="night-area">
- <div class="night-title"> 狼人投票</div>
- <p class="skill-name">选择今晚要击杀的玩家</p>
+ <div class="night-title"> 小组投票</div>
+ <p class="skill-name">选择待处理成员</p>
  <select id="night-target">
  ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join()}
  </select>
  <button class="btn-confirm" onclick="submitNightAction('kill')">投票</button>
  <div style="margin-top:12px;padding:8px;background:#f5f7fa;border-radius:4px;font-size:13px;color:#666;">
- <div style="font-weight:600;margin-bottom:4px;"> 投票结果</div>
- <div id="werewolf-votes">等待投票...</div>
+ <div style="font-weight:600;margin-bottom:4px;"> 表决结果</div>
+ <div id="werewolf-votes">等待表决...</div>
  </div>
  </div>
  `;
@@ -566,12 +566,12 @@ function renderNightAction(phase, panel) {
  case 'night_seer':
  panel.innerHTML = `
  <div class="night-area">
- <div class="night-title"> 预言家查验</div>
- <p class="skill-name">选择要查验的玩家</p>
+ <div class="night-title"> 信息查询</div>
+ <p class="skill-name">选择查询对象</p>
  <select id="night-target">
  ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join()}
  </select>
- <button class="btn-confirm" onclick="submitNightAction('investigate')">确认查验</button>
+ <button class="btn-confirm" onclick="submitNightAction('investigate')">确认查询</button>
  </div>
  `;
  break;
@@ -579,23 +579,23 @@ function renderNightAction(phase, panel) {
  case 'night_witch':
  panel.innerHTML = `
  <div class="night-area">
- <div class="night-title"> 女巫行动</div>
+ <div class="night-title"> 处置操作</div>
  <div id="witch-info" class="witch-info">加载中...</div>
  <div class="witch-actions" style="margin-top:12px;">
  <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
- <input type="checkbox" id="witch-use-save"> 使用解药
+ <input type="checkbox" id="witch-use-save"> 保留
  </label>
  <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
- <input type="checkbox" id="witch-use-kill"> 使用毒药
+ <input type="checkbox" id="witch-use-kill"> 移除
  </label>
  <div id="witch-kill-target-wrapper" class="hidden" style="margin-bottom:8px;">
- <p class="skill-name">选择毒杀目标</p>
+ <p class="skill-name">选择目标成员</p>
  <select id="night-target">
  ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join()}
  </select>
  </div>
  </div>
- <button class="btn-confirm" onclick="submitWitchAction()">确认行动</button>
+ <button class="btn-confirm" onclick="submitWitchAction()">确认</button>
  </div>
  `;
  // 毒药复选框切换显示目标选择
@@ -621,29 +621,29 @@ function isCurrentPlayerAlive() {
 // ========== 阶段文本 ==========
 function getPhaseText(phase) {
  const map = {
- 'night_werewolf': ' 夜间·决策',
- 'night_seer': ' 夜间·情报',
- 'night_witch': ' 夜间·行动',
- 'dawn_death_announce': ' 结果公示',
- 'last_words': ' 陈述',
- 'free_speech': ' 讨论阶段',
- 'vote': ' 表决阶段',
+ 'night_werewolf': ' 闭门讨论',
+ 'night_seer': ' 信息汇总',
+ 'night_witch': ' 方案制定',
+ 'dawn_death_announce': ' 结果通报',
+ 'last_words': ' 简要陈述',
+ 'free_speech': ' 开放讨论',
+ 'vote': ' 表决',
  'vote_result': ' 表决结果',
- 'tie_speech': ' 候选人发言',
- 'tie_vote': ' 再次表决',
- 'final_words': ' 陈述',
- 'settlement': ' 结算'
+ 'tie_speech': ' 提案陈述',
+ 'tie_vote': ' 复议',
+ 'final_words': ' 简要陈述',
+ 'settlement': ' 会议结束'
  };
  return map[phase] || phase;
 }
 
 function getRoleName(role) {
- const map = { werewolf: '狼人', seer: '预言家', witch: '女巫', hunter: '猎人', villager: '平民' };
+ const map = { werewolf: 'A组', seer: '分析员', witch: '运营组', hunter: '安全组', villager: '成员' };
  return map[role] || role;
 }
 
 function getRoleColor(role) {
- const map = { werewolf: '#ff4d4f', seer: '#1890ff', witch: '#722ed1', hunter: '#fa8c16', villager: '#52c41a' };
+ const map = { werewolf: '#991b1b', seer: '#92400e', witch: '#78350f', hunter: '#92400e', villager: '#4b5563' };
  return map[role] || '#999';
 }
 

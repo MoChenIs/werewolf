@@ -9,62 +9,61 @@
 <body>
   <div id="global-toast" class="toast-error hidden"></div>
 
-  <!-- 大厅 / 房间（全宽） -->
+  <!-- 大厅 -->
   <div id="lobby-page" class="page">
     <div class="lobby-container">
       <h1 class="app-title">协作工作台</h1>
       <p class="app-subtitle">沟通 · 决策 · 反馈</p>
       <div class="lobby-actions">
         <div class="input-group">
-          <input type="text" id="player-name" placeholder="输入昵称" maxlength="8">
+          <input type="text" id="player-name" placeholder="输入姓名" maxlength="8">
         </div>
         <div class="input-group">
-          <input type="text" id="room-id-input" placeholder="房间号" maxlength="6">
-          <button id="join-room-btn" class="btn btn-secondary">加入</button>
+          <input type="text" id="room-id-input" placeholder="项目编号" maxlength="6">
+          <button id="join-room-btn" class="btn btn-secondary">加入项目</button>
         </div>
         <div class="divider"><span>或</span></div>
-        <button id="create-room-btn" class="btn btn-primary">创建</button>
+        <button id="create-room-btn" class="btn btn-primary">创建项目</button>
       </div>
       <div id="lobby-error" class="error-msg hidden"></div>
     </div>
   </div>
 
+  <!-- 房间 -->
   <div id="room-page" class="page hidden">
     <div class="room-header">
-      <span>房间: <strong id="room-id-display"></strong></span>
+      <span>项目: <strong id="room-id-display"></strong></span>
       <span id="player-count-display">1/12</span>
-      <button id="add-ai-btn" class="btn btn-secondary btn-sm hidden">+AI</button>
-      <button id="start-game-btn" class="btn btn-primary btn-sm hidden">开始</button>
+      <button id="add-ai-btn" class="btn btn-secondary btn-sm hidden">+成员</button>
+      <button id="start-game-btn" class="btn btn-primary btn-sm hidden">开始会议</button>
       <button id="leave-room-btn" class="btn btn-sm leave-btn">离开</button>
     </div>
     <div id="player-list" class="player-list"></div>
   </div>
 
-  <!-- 游戏界面（左50% + 右50%留空） -->
+  <!-- 游戏页面（左50% + 右50%留空） -->
   <div id="game-page" class="page hidden">
     <div class="game-page-layout">
       <div class="game-left">
-        <div class="game-layout">
-          <div class="zone-status">
-            <div class="phase-display">
-              <span id="phase-text">等待开始</span>
-              <button class="phase-exit-btn" onclick="exitGame()">退出</button>
-            </div>
-            <div class="timer-display">
-              <span id="timer-text">--</span>
-            </div>
-            <div class="player-status-list" id="player-status-list"></div>
+        <!-- 顶部栏：阶段 + 计时器 -->
+        <div class="zone-status">
+          <div class="phase-display">
+            <span id="phase-text">等待开始</span>
+            <span class="timer-display">(<span id="timer-text">--</span>s)</span>
           </div>
-
-          <div class="zone-feed">
-            <div class="feed-header">消息记录</div>
-            <div class="feed-messages" id="feed-messages"></div>
-          </div>
-
-          <div class="zone-action">
-            <div class="action-panel" id="action-panel">
-              <p class="waiting-text">等待其他成员...</p>
-            </div>
+          <button class="phase-exit-btn" onclick="exitGame()">离开</button>
+        </div>
+        <!-- 参与者标签 -->
+        <div class="player-status-list" id="player-status-list"></div>
+        <!-- 消息区 -->
+        <div class="zone-feed">
+          <div class="feed-header">讨论记录</div>
+          <div class="feed-messages" id="feed-messages"></div>
+        </div>
+        <!-- 操作区 -->
+        <div class="zone-action">
+          <div class="action-panel" id="action-panel">
+            <p class="waiting-text">等待其他成员...</p>
           </div>
         </div>
       </div>

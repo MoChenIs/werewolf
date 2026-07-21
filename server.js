@@ -21,9 +21,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Socket.io 连接
 io.on('connection', (socket) => {
- console.log(`[连接] 玩家连接: ${socket.id}`);
+ console.log(`[连接] 成员连接: ${socket.id}`);
 
- // 创建房间
+ // 创建项目组
  socket.on('create_room', ({ playerName, config }) => {
  const { room, player } = roomManager.createRoom(socket.id, playerName, config);
  socket.join(room.id);
@@ -31,28 +31,28 @@ io.on('connection', (socket) => {
  socket.emit('your_info', { seat: player.seat, playerId: socket.id });
  });
 
- // 加入房间
+ // 加入项目组
  socket.on('join_room', ({ roomId, playerName }) => {
  const result = roomManager.joinRoom(roomId, socket.id, playerName);
  if (result.error) {
  return socket.emit('error', { code: 'JOIN_FAILED', message: result.error });
  }
  socket.join(roomId);
- // 给新玩家发房间信息
+ // 给新成员发项目组信息
  socket.emit('room_joined', roomManager.getRoomInfo(result.room));
  socket.emit('your_info', { seat: result.player.seat, playerId: socket.id });
- // 通知房间其他人（带完整玩家列表，更新 UI）
+ // 通知项目组其他人（带完整成员列表，更新 UI）
  io.to(roomId).emit('room_joined', roomManager.getRoomInfo(result.room));
  io.to(roomId).emit('player_joined', { seat: result.player.seat, name: result.player.name, isAi: false });
  });
 
- // 房主添加 AI
+ // 管理员添加 AI
  socket.on('add_ai', () => {
  const room = roomManager.findRoomBySocket(socket.id);
- if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '你不在房间中' });
- if (room.host !== socket.id) return socket.emit('error', { code: 'NOT_HOST', message: '只有房主可以添加AI' });
- if (room.status !== 'waiting') return socket.emit('error', { code: 'GAME_STARTED', message: '游戏已开始' });
- if (room.players.size >= room.config.maxPlayers) return socket.emit('error', { code: 'ROOM_FULL', message: '房间已满' });
+ if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '你不在项目组中' });
+ if (room.host !== socket.id) return socket.emit('error', { code: 'NOT_HOST', message: '只有管理员可以添加AI' });
+ if (room.status !== 'waiting') return socket.emit('error', { code: 'GAME_STARTED', message: '会议已开始' });
+ if (room.players.size >= room.config.maxPlayers) return socket.emit('error', { code: 'ROOM_FULL', message: '项目组已满' });
 
  const result = roomManager.addAiPlayer(room.id);
  if (result.error) return socket.emit('error', { ...result });
@@ -61,13 +61,13 @@ io.on('connection', (socket) => {
  io.to(room.id).emit('room_joined', roomManager.getRoomInfo(room));
  });
 
- // 玩家离开
+ // 成员离开
  socket.on('leave_room', () => {
  const room = roomManager.findRoomBySocket(socket.id);
  if (!room) return;
 
  if (room.status === 'playing') {
- // 游戏中有人退出 → 游戏结束
+ // 会议中有人退出 → 会议结束
  const player = room.players.get(socket.id);
  if (player) {
  socket.leave(room.id);
@@ -75,7 +75,7 @@ io.on('connection', (socket) => {
  const isGood = p.role !== 'werewolf';
  const playerWon = false;
  io.to(p.id).emit('game_over', {
- winner: 'none', message: `${player.name} 退出游戏，本局终止`, youWon: false,
+ winner: 'none', message: `${player.name} 退出会议，本局终止`, youWon: false,
  roles: Array.from(room.players.values()).map(r => ({ seat: r.seat, name: r.name, role: r.role }))
  });
  });
@@ -98,12 +98,12 @@ io.on('connection', (socket) => {
  }
  });
 
- // 开始游戏
+ // 开始会议
  socket.on('start_game', () => {
  const room = roomManager.findRoomBySocket(socket.id);
- if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '你不在房间中' });
- if (room.host !== socket.id) return socket.emit('error', { code: 'NOT_HOST', message: '只有房主可以开始游戏' });
- if (room.players.size < 4) return socket.emit('error', { code: 'NOT_ENOUGH', message: '至少需要4名玩家' });
+ if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '你不在项目组中' });
+ if (room.host !== socket.id) return socket.emit('error', { code: 'NOT_HOST', message: '只有管理员可以开始会议' });
+ if (room.players.size < 4) return socket.emit('error', { code: 'NOT_ENOUGH', message: '至少需要4名成员' });
 
  const engine = new GameEngine(room);
  room.game = engine;
@@ -115,13 +115,13 @@ io.on('connection', (socket) => {
  io.to(player.id).emit('game_started', { role: player.role });
  });
 
- // 广播游戏开始
+ // 广播会议开始
  io.to(room.id).emit('phase_change', {
  phase: 'night_werewolf',
- message: ' 狼人行动中'
+ message: ' A组决策中'
  });
 
- // 告知狼人队友
+ // 告知A组队友
  const werewolves = engine.getWerewolves();
  const werewolfSeats = werewolves.map(w => ({ seat: w.seat, name: w.name }));
 
@@ -129,7 +129,7 @@ io.on('connection', (socket) => {
  io.to(w.id).emit('night_teammates', { teammates: werewolfSeats.filter(t => t.seat !== w.seat) });
  });
 
- // 通知所有狼人投票选择目标
+ // 通知所有A组投票选择目标
  const targets = Array.from(room.players.values()).filter(p => p.isAlive).map(p => ({ seat: p.seat, name: p.name }));
 
  engine.werewolfVotes = {};
@@ -142,11 +142,11 @@ io.on('connection', (socket) => {
  });
  });
 
- // AI 狼人自动投票，确保不卡流程
+ // AI A组自动投票，确保不卡流程
  autoProcessAiNight(room, io);
  });
 
- // 房主开始白天发言
+ // 管理员开始白天发言
  socket.on('start_free_speech', () => {
  const room = roomManager.findRoomBySocket(socket.id);
  if (!room || room.host !== socket.id) return;
@@ -158,7 +158,7 @@ io.on('connection', (socket) => {
  startSpeechTimerForSpeaker(room, io);
  });
 
- // 玩家提交发言
+ // 成员提交发言
  socket.on('player_speech', ({ content }) => {
  const room = roomManager.findRoomBySocket(socket.id);
  if (!room || !room.game) return;
@@ -256,7 +256,7 @@ io.on('connection', (socket) => {
  }
  });
 
- // 夜间行动
+ // 夜间处理
  socket.on('night_action', ({ target, action, save, killTarget }) => {
  const room = roomManager.findRoomBySocket(socket.id);
  if (!room || !room.game) return;
@@ -271,12 +271,12 @@ io.on('connection', (socket) => {
  const voter = engine.room.players.get(socket.id);
  if (!voter) break;
 
- // 记录狼人投票（AI 狼人自动投随机目标）
+ // 记录A组投票（AI A组自动投随机目标）
  engine.werewolfVotes[voter.seat] = target;
  const aliveWerewolves = engine.getWerewolves().filter(w => w.isAlive);
  const totalWolves = aliveWerewolves.length;
 
- // AI 狼人自动补齐投票
+ // AI A组自动补齐投票
  const nonWolfTargets = Array.from(room.players.values()).filter(p => p.isAlive && p.role !== 'werewolf');
  aliveWerewolves.forEach(w => {
  if (w.isAi && engine.werewolfVotes[w.seat] === undefined) {
@@ -289,7 +289,7 @@ io.on('connection', (socket) => {
 
  const votedCount = Object.keys(engine.werewolfVotes).length;
 
- // 广播投票给其他狼人
+ // 广播投票给其他A组
  aliveWerewolves.forEach(w => {
  io.to(w.id).emit('werewolf_vote', {
  votes: { ...engine.werewolfVotes },
@@ -298,7 +298,7 @@ io.on('connection', (socket) => {
  });
  });
 
- // 所有狼人都投票了，统计结果
+ // 所有A组都投票了，统计结果
  if (votedCount >= totalWolves) {
  const tally = {};
  Object.values(engine.werewolfVotes).forEach(t => {
@@ -309,10 +309,10 @@ io.on('connection', (socket) => {
  const topTargets = Object.entries(tally).filter(([_, c]) => c === maxVotes);
 
  if (topTargets.length === 1 && maxVotes >= Math.ceil(totalWolves / 2)) {
- // 多数决：击杀目标
+ // 多数决：处理目标
  engine.nightActions.werewolfKill = parseInt(topTargets[0][0]);
  aliveWerewolves.forEach(w => {
- io.to(w.id).emit('night_result', { message: `已确认击杀 ${topTargets[0][0]}号` });
+ io.to(w.id).emit('night_result', { message: `已确认处理 ${topTargets[0][0]}号` });
  });
  engine.werewolfVotes = {};
  handleNightPhase(room, io, engine.advanceNight());
@@ -368,7 +368,7 @@ io.on('connection', (socket) => {
  if (!room.playAgainVotes) room.playAgainVotes = new Set();
  room.playAgainVotes.add(socket.id);
 
- // 人类玩家总数（AI 自动同意）
+ // 人类成员总数（AI 自动同意）
  const totalHumans = Array.from(room.players.values()).filter(p => !p.isAi).length;
  const votedCount = room.playAgainVotes.size;
 
@@ -380,11 +380,11 @@ io.on('connection', (socket) => {
  total: totalHumans
  });
 
- // 所有人类玩家都同意 = 重开
+ // 所有人类成员都同意 = 重开
  if (votedCount >= totalHumans) restartGame(room);
  });
 
- // 猎人被动技能：死亡后带走一人
+ // 安全组被动技能：死亡后带走一人
  socket.on('hunter_shoot', ({ targetSeat }) => {
  const room = roomManager.findRoomBySocket(socket.id);
  if (!room || !room.game) return;
@@ -405,14 +405,14 @@ io.on('connection', (socket) => {
  target.isAlive = false;
  if (revealRole) {
  io.to(room.id).emit('death_announce', { seat: target.seat, name: target.name });
- io.to(room.id).emit('night_result', { message: ` 猎人带走${targetSeat}号 ${target.name}` });
+ io.to(room.id).emit('night_result', { message: ` 安全组指定${targetSeat}号 ${target.name}` });
  }
  }
  }
  });
 
  socket.on('disconnect', () => {
- console.log(`[断开] 玩家断开: ${socket.id}`);
+ console.log(`[断开] 成员断开: ${socket.id}`);
  const room = roomManager.findRoomBySocket(socket.id);
  if (room) {
  const player = room.players.get(socket.id);
@@ -432,7 +432,7 @@ io.on('connection', (socket) => {
  });
  }, 5000);
 
- // 60秒后根据房间状态处理
+ // 60秒后根据项目组状态处理
  room._disconnectTimer = setTimeout(() => {
  if (!player.disconnected) return;
  if (player.disconnected && room.status === 'waiting') {
@@ -447,7 +447,7 @@ io.on('connection', (socket) => {
  player.isAlive = false;
  io.to(room.id).emit('phase_change', {
  phase: room.game.phase,
- message: `${player.seat}号 ${player.name} 因断线超时，被标记为出局`,
+ message: `${player.seat}号 ${player.name} 因断线超时，被标记为离场`,
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
@@ -461,7 +461,7 @@ io.on('connection', (socket) => {
  // 重连
  socket.on('reconnect_player', ({ roomId, seat }) => {
  const room = roomManager.rooms.get(roomId);
- if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '房间不存在' });
+ if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '项目组不存在' });
 
  let player = null;
  for (const [, p] of room.players) {
@@ -471,7 +471,7 @@ io.on('connection', (socket) => {
  }
  }
 
- if (!player) return socket.emit('error', { code: 'NOT_IN_ROOM', message: '你不在这个房间中' });
+ if (!player) return socket.emit('error', { code: 'NOT_IN_ROOM', message: '你不在这个项目组中' });
 
  const oldId = player.id;
  // 更新 Map 键和新 ID
@@ -493,7 +493,7 @@ io.on('connection', (socket) => {
  room._disconnectTimer = null;
  }
 
- // 重连玩家如果是房主，更新房间 host 指向新 ID
+ // 重连成员如果是管理员，更新项目组 host 指向新 ID
  if (room.host === oldId) {
  room.host = socket.id;
  io.to(roomId).emit('host_changed', { newHost: socket.id });
@@ -501,7 +501,7 @@ io.on('connection', (socket) => {
 
  // 通知所有人断线状态已恢复
  io.to(roomId).emit('player_reconnected', { seat: player.seat });
- // 更新全房间的玩家列表（含断线状态恢复）
+ // 更新全项目组的成员列表（含断线状态恢复）
  io.to(roomId).emit('phase_change', {
  phase: room.game ? room.game.phase : 'waiting',
  players: Array.from(room.players.values()).map(p => ({
@@ -559,7 +559,7 @@ function restorePlayerTurn(room, engine, socket, player) {
  return;
  }
 
- // 夜间阶段：如果该玩家应该行动，恢复操作面板
+ // 夜间阶段：如果该成员应该行动，恢复操作面板
  if (engine.phase.startsWith('night_')) {
  let shouldAct = false;
  let actionData = null;
@@ -608,7 +608,7 @@ function filterSensitiveWords(content) {
  return filtered;
 }
 
-// 天亮后自动开始讨论（无需房主点击）
+// 天亮后自动开始讨论（无需管理员点击）
 function autoStartSpeech(room, io) {
  const engine = room.game;
  if (!engine || engine.phase !== 'dawn_death_announce') return;
@@ -638,7 +638,7 @@ function startSpeechTimerForSpeaker(room, io) {
  }
 
  // 90秒后自动结束发言
- // 倒计时仅发给当前发言者，其他玩家看到 `--`
+ // 倒计时仅发给当前发言者，其他成员看到 `--`
  if (speaker && !speaker.isAi) {
  io.to(speaker.id).emit('timer_sync', {
  startTimestamp: engine.speechStartTime,
@@ -652,7 +652,7 @@ function startSpeechTimerForSpeaker(room, io) {
  handleSpeechTransition(room, io, next);
  }, engine.speechDuration);
 
- // 已死亡/断线玩家自动跳过发言
+ // 已死亡/断线成员自动跳过发言
  if (!speaker || !speaker.isAlive || speaker.disconnected) {
  clearTimeout(room._speechTimer);
  const next = engine.nextSpeaker();
@@ -660,7 +660,7 @@ function startSpeechTimerForSpeaker(room, io) {
  return;
  }
 
- // AI 玩家自动结束发言
+ // AI 成员自动结束发言
  if (speaker.isAi) {
  clearTimeout(room._speechTimer);
  const next = engine.nextSpeaker();
@@ -698,15 +698,15 @@ function handleVoteResult(room, io, result) {
  });
 
  if (result.phase === 'final_words') {
- // 查找被票出局的玩家角色
+ // 查找被票离场的成员角色
  const eliminatedPlayer = Array.from(room.players.values()).find(p => p.seat === result.eliminated.seat);
  const isHunterEliminated = eliminatedPlayer && eliminatedPlayer.role === 'hunter';
 
- // 被票出局的如果是猎人，触发被动技能
+ // 被票离场的如果是安全组，触发被动技能
  triggerHunterPassive(room, io);
 
- const messages = [`${result.eliminated.seat}号玩家被票决`];
- if (isHunterEliminated) messages.push(`${result.eliminated.seat}号玩家是猎人`);
+ const messages = [`${result.eliminated.seat}号成员被表决离场`];
+ if (isHunterEliminated) messages.push(`${result.eliminated.seat}号成员是安全组`);
 
  io.to(room.id).emit('phase_change', {
  phase: 'final_words',
@@ -726,15 +726,15 @@ function handleVoteResult(room, io, result) {
  } else if (result.phase === 'tie_vote') {
  // 同票重投结束
  if (result.eliminated) {
- // 查找被票出局的玩家角色
+ // 查找被票离场的成员角色
  const eliminatedPlayer = Array.from(room.players.values()).find(p => p.seat === result.eliminated.seat);
  const isHunterEliminated = eliminatedPlayer && eliminatedPlayer.role === 'hunter';
 
- // 被票出局的如果是猎人，触发被动技能
+ // 被票离场的如果是安全组，触发被动技能
  triggerHunterPassive(room, io);
 
- const messages = [`${result.eliminated.seat}号玩家被票决`];
- if (isHunterEliminated) messages.push(`${result.eliminated.seat}号玩家是猎人`);
+ const messages = [`${result.eliminated.seat}号成员被表决离场`];
+ if (isHunterEliminated) messages.push(`${result.eliminated.seat}号成员是安全组`);
 
  io.to(room.id).emit('phase_change', {
  phase: 'final_words',
@@ -743,10 +743,10 @@ function handleVoteResult(room, io, result) {
  });
  handleAfterFinalWords(room, io, room.game);
  } else {
- // 再次同票，无人出局 → 进入下一夜
+ // 再次同票，无人离场 → 进入下一夜
  io.to(room.id).emit('phase_change', {
  phase: 'free_speech',
- message: '再次同票，无人出局，进入下一轮'
+ message: '再次同票，无人离场，进入下一轮'
  });
  setTimeout(() => {
  const next = room.game.afterFinalWords();
@@ -797,7 +797,7 @@ function startTieSpeaker(room, io, speakerSeat) {
  });
  }
 
- // AI 或已断线玩家自动跳过
+ // AI 或已断线成员自动跳过
  if (!speaker || !speaker.isAlive || speaker.disconnected || speaker.isAi) {
  const next = engine.nextTieSpeaker();
  if (next.phase === 'tie_vote') {
@@ -858,10 +858,10 @@ function handleAfterFinalWords(room, io, engine) {
 }
 
 const phaseFlowNames = {
- night_werewolf: ' 狼人',
- night_seer: ' 预言家',
- night_witch: ' 女巫',
- night_hunter: ' 猎人'
+ night_werewolf: ' A组',
+ night_seer: ' 分析员',
+ night_witch: ' 运营组',
+ night_hunter: ' 安全组'
 };
 
 function handleNightPhase(room, io, result) {
@@ -871,7 +871,7 @@ function handleNightPhase(room, io, result) {
  if (result.prevPhase && phaseFlowNames[result.prevPhase]) {
  io.to(room.id).emit('phase_change', {
  phase: result.phase,
- message: `${phaseFlowNames[result.prevPhase]}行动结束`,
+ message: `${phaseFlowNames[result.prevPhase]}处理完成`,
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
@@ -880,15 +880,15 @@ function handleNightPhase(room, io, result) {
 
  // 天亮消息 → 自动开始讨论
  if (result.phase === 'dawn_death_announce') {
- // 夜间死亡后检查游戏是否结束
+ // 夜间死亡后检查会议是否结束
  if (checkAndHandleGameEnd(room, io)) return;
 
- // 猎人夜间死亡触发被动（不暴露身份）
+ // 安全组夜间死亡触发被动（不暴露身份）
  triggerHunterPassive(room, io, false);
 
  const deaths = result.deaths || [];
  const deathMsg = deaths.length
- ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号玩家死亡`).join('、')}`
+ ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join('、')}`
  : '天亮了，昨晚是平安夜';
  io.to(room.id).emit('phase_change', {
  phase: result.phase, deaths,
@@ -905,7 +905,7 @@ function handleNightPhase(room, io, result) {
  const phaseMsg = phaseFlowNames[result.phase];
  io.to(room.id).emit('phase_change', {
  phase: result.phase,
- message: phaseMsg ? `${phaseMsg}行动中` : (result.message || ` 第${room.game.round}轮·进行中`),
+ message: phaseMsg ? `${phaseMsg}处理中` : (result.message || ` 第${room.game.round}轮·进行中`),
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
@@ -953,7 +953,7 @@ function handleNightPhase(room, io, result) {
  isYou: true,
  ...actionData
  });
- // 女巫信息在面板渲染后发送（确保 DOM 元素已存在）
+ // 运营组信息在面板渲染后发送（确保 DOM 元素已存在）
  if (engine.phase === 'night_witch' && player.role === 'witch') {
  io.to(player.id).emit('witch_info', actionData.info);
  }
@@ -972,7 +972,7 @@ function handleNightPhase(room, io, result) {
  if (nextPhase.prevPhase && phaseFlowNames[nextPhase.prevPhase]) {
  io.to(room.id).emit('phase_change', {
  phase: nextPhase.phase, deaths: nextPhase.deaths,
- message: `${phaseFlowNames[nextPhase.prevPhase]}行动结束`,
+ message: `${phaseFlowNames[nextPhase.prevPhase]}处理完成`,
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
@@ -982,7 +982,7 @@ function handleNightPhase(room, io, result) {
  triggerHunterPassive(room, io, false);
  const deaths = nextPhase.deaths || [];
  const deathMsg = deaths.length
- ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号玩家死亡`).join('、')}`
+ ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join('、')}`
  : '天亮了，昨晚是平安夜';
  io.to(room.id).emit('phase_change', {
  phase: nextPhase.phase, deaths,
@@ -999,7 +999,7 @@ function handleNightPhase(room, io, result) {
  }, engine.nightDuration);
 }
 
-// ========== 游戏结束检查（通用） ==========
+// ========== 会议结束检查（通用） ==========
 
 function checkAndHandleGameEnd(room, io) {
  const engine = room.game;
@@ -1042,7 +1042,7 @@ function restartGame(room) {
  io.to(room.id).emit('room_joined', roomManager.getRoomInfo(room));
 }
 
-// ========== 猎人被动技能 ==========
+// ========== 安全组被动技能 ==========
 
 function triggerHunterPassive(room, io, revealRole = true) {
  const engine = room.game;
@@ -1054,20 +1054,20 @@ function triggerHunterPassive(room, io, revealRole = true) {
  engine.hunterUsedAbility = true;
 
  if (hunter.isAi) {
- // AI 猎人随机带走一人（夜间不提示，白天统一公告死亡）
+ // AI 安全组随机带走一人（夜间不提示，白天统一公告死亡）
  const targets = Array.from(room.players.values()).filter(p => p.isAlive && p.seat !== hunter.seat);
  if (targets.length > 0) {
  const pick = targets[Math.floor(Math.random() * targets.length)];
  pick.isAlive = false;
  if (revealRole) {
  io.to(room.id).emit('death_announce', { seat: pick.seat, name: pick.name });
- io.to(room.id).emit('night_result', { message: ` 猎人带走${pick.seat}号 ${pick.name}` });
+ io.to(room.id).emit('night_result', { message: ` 安全组指定${pick.seat}号 ${pick.name}` });
  }
  }
  return;
  }
 
- // 人类猎人：15秒内选择目标
+ // 人类安全组：15秒内选择目标
  const targets = Array.from(room.players.values())
  .filter(p => p.isAlive && p.seat !== hunter.seat)
  .map(p => ({ seat: p.seat, name: p.name }));
@@ -1121,7 +1121,7 @@ function autoVoteForAiPlayers(room, io) {
  }
  }
 
- // 检查是否所有存活玩家都已投票
+ // 检查是否所有存活成员都已投票
  const aliveCount = Array.from(room.players.values()).filter(p => p.isAlive).length;
  if (Object.keys(engine.votes).length >= aliveCount) {
  clearTimeout(room._voteTimer);
@@ -1162,7 +1162,7 @@ function autoProcessAiNight(room, io) {
  }
  break;
  }
- // 预言家/女巫 AI 不做任何操作（跳过）
+ // 分析员/运营组 AI 不做任何操作（跳过）
  }
  }
  if (isActor && !player.isAi) {
@@ -1179,7 +1179,7 @@ function autoProcessAiNight(room, io) {
  if (next.prevPhase && phaseFlowNames[next.prevPhase]) {
  io.to(room.id).emit('phase_change', {
  phase: next.phase, deaths: next.deaths,
- message: `${phaseFlowNames[next.prevPhase]}行动结束`,
+ message: `${phaseFlowNames[next.prevPhase]}处理完成`,
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
@@ -1189,7 +1189,7 @@ function autoProcessAiNight(room, io) {
  triggerHunterPassive(room, io, false);
  const deaths = next.deaths || [];
  const deathMsg = deaths.length
- ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号玩家死亡`).join('、')}`
+ ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join('、')}`
  : '天亮了，昨晚是平安夜';
  io.to(room.id).emit('phase_change', {
  phase: next.phase, deaths,
@@ -1207,5 +1207,5 @@ function autoProcessAiNight(room, io) {
 }
 
 server.listen(PORT, () => {
- console.log(`[启动] 狼人杀服务器运行在 http://localhost:${PORT}`);
+ console.log(`[启动] 协作平台运行在 http://localhost:${PORT}`);
 });

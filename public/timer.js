@@ -51,13 +51,6 @@ class GameTimer {
     if (!timerEl) return;
     const seconds = Math.ceil(this.remaining / 1000);
     timerEl.textContent = seconds > 0 ? seconds : '--';
-
-    // 颜色变化：最后10秒变红
-    if (seconds <= 10 && seconds > 0) {
-      timerEl.style.color = '#ff4444';
-    } else {
-      timerEl.style.color = '#666';
-    }
   }
 
   getRemaining() {
