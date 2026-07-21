@@ -142,7 +142,7 @@ socket.on('game_started', ({ role }) => {
  // 清空旧聊天记录
  document.getElementById('feed-messages').innerHTML = '';
  showPage('game-page');
- addMessage('system', `会议开始！你的角色：${getRoleName(role)}`);
+ addMessage('system', `会议开始！你的身份：${getRoleName(role)}`);
  // 缓存自己的角色到 sessionStorage
  sessionStorage.setItem('werewolf_role', role);
 });
@@ -292,7 +292,7 @@ function playAgain() {
 // 夜间队友信息
 socket.on('night_teammates', (data) => {
  if (data.teammates && data.teammates.length > 0) {
- addMessage('private', ` 同组：${data.teammates.map(t => `${t.seat}号 ${t.name}`).join(' ')}`);
+ addMessage('private', ` 狼队友：${data.teammates.map(t => `${t.seat}号 ${t.name}`).join(' ')}`);
  } else {
  addMessage('private', ' 无同组人员');
  }
@@ -638,12 +638,12 @@ function getPhaseText(phase) {
 }
 
 function getRoleName(role) {
- const map = { werewolf: 'A组', seer: '分析员', witch: '运营组', hunter: '安全组', villager: '成员' };
+ const map = { werewolf: '狼人', seer: '预言家', witch: '女巫', hunter: '猎人', villager: '平民' };
  return map[role] || role;
 }
 
 function getRoleColor(role) {
- const map = { werewolf: '#991b1b', seer: '#92400e', witch: '#78350f', hunter: '#92400e', villager: '#4b5563' };
+ const map = { werewolf: '#ff4d4f', seer: '#1890ff', witch: '#722ed1', hunter: '#fa8c16', villager: '#52c41a' };
  return map[role] || '#999';
 }
 

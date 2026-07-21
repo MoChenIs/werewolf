@@ -22,10 +22,10 @@ class GameEngine {
  this.history = [];
  this.votes = {}; // seat -> targetSeat
  this.nightActions = {};
- this.werewolfVotes = {}; // seat → targetSeat，A组投票记录
+ this.werewolfVotes = {}; // seat → targetSeat，狼人投票记录
  this.witchUsedSave = false;
  this.witchUsedKill = false;
- this.hunterUsedAbility = false; // 安全组是否已使用被动技能
+ this.hunterUsedAbility = false; // 猎人是否已使用被动技能
  }
 
  // 分配角色
@@ -35,13 +35,13 @@ class GameEngine {
  const werewolfCount = Math.min(this.room.config.werewolfCount, Math.floor(count / 3));
  const roleList = [];
 
- // 添加A组
+ // 添加狼人
  for (let i = 0; i < werewolfCount; i++) roleList.push(roles.WEREWOLF);
- // 添加分析员
+ // 添加预言家
  roleList.push(roles.SEER);
- // 添加运营组
+ // 添加女巫
  roleList.push(roles.WITCH);
- // 添加安全组
+ // 添加猎人
  roleList.push(roles.HUNTER);
  // 剩余为成员
  while (roleList.length < count) roleList.push(roles.VILLAGER);
@@ -60,7 +60,7 @@ class GameEngine {
  return { roleList, players };
  }
 
- // 获取已死亡但未使用技能的安全组（被动：死亡后可带走一人）
+ // 获取已死亡但未使用技能的猎人（被动：死亡后可带走一人）
  getPendingHunter() {
  return Array.from(this.room.players.values())
  .find(p => p.role === roles.HUNTER && !p.isAlive && !this.hunterUsedAbility) || null;
@@ -72,13 +72,13 @@ class GameEngine {
  return player ? player.role : null;
  }
 
- // 获取所有A组列表
+ // 获取所有狼人列表
  getWerewolves() {
  return Array.from(this.room.players.values())
  .filter(p => p.role === roles.WEREWOLF);
  }
 
- // 检查胜负（9人局：3狼/1分析员/1运营组/1安全组/3成员）
+ // 检查胜负（9人局：3狼/1预言家/1女巫/1猎人/3成员）
  checkGameEnd() {
  const alivePlayers = Array.from(this.room.players.values()).filter(p => p.isAlive);
  const aliveWerewolves = alivePlayers.filter(p => p.role === roles.WEREWOLF);
@@ -89,13 +89,13 @@ class GameEngine {
  if (aliveWerewolves.length === 0) {
  return { ended: true, winner: 'good', message: '好人胜利' };
  }
- // 三成员全死 → A组胜利
+ // 三成员全死 → 狼人胜利
  if (aliveVillagers.length === 0) {
- return { ended: true, winner: 'werewolf', message: 'A组胜利' };
+ return { ended: true, winner: 'werewolf', message: '狼人胜利' };
  }
- // 三神全死 → A组胜利
+ // 三神全死 → 狼人胜利
  if (aliveGods.length === 0) {
- return { ended: true, winner: 'werewolf', message: 'A组胜利' };
+ return { ended: true, winner: 'werewolf', message: '狼人胜利' };
  }
  return { ended: false };
  }
@@ -117,11 +117,11 @@ class GameEngine {
  this.assignRoles();
  this.round = 1;
  this.phase = 'night_werewolf';
- this.addLog('system', '天黑请闭眼。A组请行动...');
+ this.addLog('system', '天黑请闭眼。狼人请行动...');
  return this.phase;
  }
 
- // 进入夜间下一角色阶段（安全组已移除主动阶段，改为死亡触发）
+ // 进入夜间下一角色阶段（猎人已移除主动阶段，改为死亡触发）
  advanceNight() {
  const nightOrder = ['night_werewolf', 'night_seer', 'night_witch'];
  const prevPhase = this.phase;
@@ -144,7 +144,7 @@ class GameEngine {
  return { phase: this.phase, deaths, isDay: true, prevPhase };
  }
 
- // 计算死者（处理运营组解救和毒杀）
+ // 计算死者（处理女巫解救和毒杀）
  calculateDeaths() {
  const werewolfKill = this.nightActions.werewolfKill;
  const witchSave = this.nightActions.witchSave;

@@ -118,10 +118,10 @@ io.on('connection', (socket) => {
  // 广播会议开始
  io.to(room.id).emit('phase_change', {
  phase: 'night_werewolf',
- message: ' A组决策中'
+ message: ' 狼人行动中'
  });
 
- // 告知A组队友
+ // 告知狼人队友
  const werewolves = engine.getWerewolves();
  const werewolfSeats = werewolves.map(w => ({ seat: w.seat, name: w.name }));
 
@@ -129,7 +129,7 @@ io.on('connection', (socket) => {
  io.to(w.id).emit('night_teammates', { teammates: werewolfSeats.filter(t => t.seat !== w.seat) });
  });
 
- // 通知所有A组投票选择目标
+ // 通知所有狼人投票选择目标
  const targets = Array.from(room.players.values()).filter(p => p.isAlive).map(p => ({ seat: p.seat, name: p.name }));
 
  engine.werewolfVotes = {};
@@ -142,7 +142,7 @@ io.on('connection', (socket) => {
  });
  });
 
- // AI A组自动投票，确保不卡流程
+ // AI 狼人自动投票，确保不卡流程
  autoProcessAiNight(room, io);
  });
 
@@ -271,12 +271,12 @@ io.on('connection', (socket) => {
  const voter = engine.room.players.get(socket.id);
  if (!voter) break;
 
- // 记录A组投票（AI A组自动投随机目标）
+ // 记录狼人投票（AI 狼人自动投随机目标）
  engine.werewolfVotes[voter.seat] = target;
  const aliveWerewolves = engine.getWerewolves().filter(w => w.isAlive);
  const totalWolves = aliveWerewolves.length;
 
- // AI A组自动补齐投票
+ // AI 狼人自动补齐投票
  const nonWolfTargets = Array.from(room.players.values()).filter(p => p.isAlive && p.role !== 'werewolf');
  aliveWerewolves.forEach(w => {
  if (w.isAi && engine.werewolfVotes[w.seat] === undefined) {
@@ -289,7 +289,7 @@ io.on('connection', (socket) => {
 
  const votedCount = Object.keys(engine.werewolfVotes).length;
 
- // 广播投票给其他A组
+ // 广播投票给其他狼人
  aliveWerewolves.forEach(w => {
  io.to(w.id).emit('werewolf_vote', {
  votes: { ...engine.werewolfVotes },
@@ -298,7 +298,7 @@ io.on('connection', (socket) => {
  });
  });
 
- // 所有A组都投票了，统计结果
+ // 所有狼人都投票了，统计结果
  if (votedCount >= totalWolves) {
  const tally = {};
  Object.values(engine.werewolfVotes).forEach(t => {
@@ -384,7 +384,7 @@ io.on('connection', (socket) => {
  if (votedCount >= totalHumans) restartGame(room);
  });
 
- // 安全组被动技能：死亡后带走一人
+ // 猎人被动技能：死亡后带走一人
  socket.on('hunter_shoot', ({ targetSeat }) => {
  const room = roomManager.findRoomBySocket(socket.id);
  if (!room || !room.game) return;
@@ -405,7 +405,7 @@ io.on('connection', (socket) => {
  target.isAlive = false;
  if (revealRole) {
  io.to(room.id).emit('death_announce', { seat: target.seat, name: target.name });
- io.to(room.id).emit('night_result', { message: ` 安全组指定${targetSeat}号 ${target.name}` });
+ io.to(room.id).emit('night_result', { message: ` 猎人指定${targetSeat}号 ${target.name}` });
  }
  }
  }
@@ -702,11 +702,11 @@ function handleVoteResult(room, io, result) {
  const eliminatedPlayer = Array.from(room.players.values()).find(p => p.seat === result.eliminated.seat);
  const isHunterEliminated = eliminatedPlayer && eliminatedPlayer.role === 'hunter';
 
- // 被票离场的如果是安全组，触发被动技能
+ // 被票离场的如果是猎人，触发被动技能
  triggerHunterPassive(room, io);
 
  const messages = [`${result.eliminated.seat}号成员被表决离场`];
- if (isHunterEliminated) messages.push(`${result.eliminated.seat}号成员是安全组`);
+ if (isHunterEliminated) messages.push(`${result.eliminated.seat}号成员是猎人`);
 
  io.to(room.id).emit('phase_change', {
  phase: 'final_words',
@@ -730,11 +730,11 @@ function handleVoteResult(room, io, result) {
  const eliminatedPlayer = Array.from(room.players.values()).find(p => p.seat === result.eliminated.seat);
  const isHunterEliminated = eliminatedPlayer && eliminatedPlayer.role === 'hunter';
 
- // 被票离场的如果是安全组，触发被动技能
+ // 被票离场的如果是猎人，触发被动技能
  triggerHunterPassive(room, io);
 
  const messages = [`${result.eliminated.seat}号成员被表决离场`];
- if (isHunterEliminated) messages.push(`${result.eliminated.seat}号成员是安全组`);
+ if (isHunterEliminated) messages.push(`${result.eliminated.seat}号成员是猎人`);
 
  io.to(room.id).emit('phase_change', {
  phase: 'final_words',
@@ -858,10 +858,10 @@ function handleAfterFinalWords(room, io, engine) {
 }
 
 const phaseFlowNames = {
- night_werewolf: ' A组',
- night_seer: ' 分析员',
- night_witch: ' 运营组',
- night_hunter: ' 安全组'
+ night_werewolf: ' 狼人',
+ night_seer: ' 预言家',
+ night_witch: ' 女巫',
+ night_hunter: ' 猎人'
 };
 
 function handleNightPhase(room, io, result) {
@@ -883,7 +883,7 @@ function handleNightPhase(room, io, result) {
  // 夜间死亡后检查会议是否结束
  if (checkAndHandleGameEnd(room, io)) return;
 
- // 安全组夜间死亡触发被动（不暴露身份）
+ // 猎人夜间死亡触发被动（不暴露身份）
  triggerHunterPassive(room, io, false);
 
  const deaths = result.deaths || [];
@@ -953,7 +953,7 @@ function handleNightPhase(room, io, result) {
  isYou: true,
  ...actionData
  });
- // 运营组信息在面板渲染后发送（确保 DOM 元素已存在）
+ // 女巫信息在面板渲染后发送（确保 DOM 元素已存在）
  if (engine.phase === 'night_witch' && player.role === 'witch') {
  io.to(player.id).emit('witch_info', actionData.info);
  }
@@ -1042,7 +1042,7 @@ function restartGame(room) {
  io.to(room.id).emit('room_joined', roomManager.getRoomInfo(room));
 }
 
-// ========== 安全组被动技能 ==========
+// ========== 猎人被动技能 ==========
 
 function triggerHunterPassive(room, io, revealRole = true) {
  const engine = room.game;
@@ -1054,20 +1054,20 @@ function triggerHunterPassive(room, io, revealRole = true) {
  engine.hunterUsedAbility = true;
 
  if (hunter.isAi) {
- // AI 安全组随机带走一人（夜间不提示，白天统一公告死亡）
+ // AI 猎人随机带走一人（夜间不提示，白天统一公告死亡）
  const targets = Array.from(room.players.values()).filter(p => p.isAlive && p.seat !== hunter.seat);
  if (targets.length > 0) {
  const pick = targets[Math.floor(Math.random() * targets.length)];
  pick.isAlive = false;
  if (revealRole) {
  io.to(room.id).emit('death_announce', { seat: pick.seat, name: pick.name });
- io.to(room.id).emit('night_result', { message: ` 安全组指定${pick.seat}号 ${pick.name}` });
+ io.to(room.id).emit('night_result', { message: ` 猎人指定${pick.seat}号 ${pick.name}` });
  }
  }
  return;
  }
 
- // 人类安全组：15秒内选择目标
+ // 人类猎人：15秒内选择目标
  const targets = Array.from(room.players.values())
  .filter(p => p.isAlive && p.seat !== hunter.seat)
  .map(p => ({ seat: p.seat, name: p.name }));
@@ -1162,7 +1162,7 @@ function autoProcessAiNight(room, io) {
  }
  break;
  }
- // 分析员/运营组 AI 不做任何操作（跳过）
+ // 预言家/女巫 AI 不做任何操作（跳过）
  }
  }
  if (isActor && !player.isAi) {
