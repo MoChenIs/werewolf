@@ -1,0 +1,153 @@
+/* ========== 全局重置 ========== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, 'Microsoft YaHei', sans-serif;
+  background: #0f0f23;
+  color: #e0e0e0;
+  min-height: 100vh;
+  overflow: hidden;
+}
+.hidden { display: none !important; }
+
+/* ========== 大厅 ========== */
+.page { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+.lobby-container { text-align: center; padding: 40px; max-width: 420px; }
+.game-title { font-size: 36px; color: #e94560; margin-bottom: 8px; }
+.game-subtitle { font-size: 14px; color: #888; margin-bottom: 32px; }
+.input-group {
+  display: flex; gap: 8px; margin-bottom: 12px;
+}
+.input-group input {
+  flex: 1; padding: 10px 14px; border: 1px solid #333; border-radius: 6px;
+  background: #1a1a2e; color: #fff; font-size: 15px; outline: none;
+}
+.input-group input:focus { border-color: #e94560; }
+.btn {
+  padding: 10px 20px; border: none; border-radius: 6px; font-size: 15px;
+  cursor: pointer; transition: all 0.2s;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: #e94560; color: #fff; width: 100%; }
+.btn-secondary { background: #16213e; color: #e94560; border: 1px solid #e94560; white-space: nowrap; }
+.btn-sm { padding: 6px 14px; font-size: 13px; width: auto; }
+.divider { margin: 16px 0; color: #555; display: flex; align-items: center; gap: 12px; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #333; }
+.error-msg { color: #ff6b6b; margin-top: 12px; font-size: 14px; }
+
+/* ========== 房间页面 ========== */
+#room-page { flex-direction: column; gap: 20px; padding: 40px; }
+.room-header {
+  display: flex; align-items: center; gap: 20px; padding: 16px 24px;
+  background: #1a1a2e; border-radius: 8px; width: 100%; max-width: 500px;
+  font-size: 16px;
+}
+.player-list {
+  display: flex; flex-wrap: wrap; gap: 10px; max-width: 500px; width: 100%;
+}
+.player-list .player-card {
+  padding: 10px 16px; background: #16213e; border-radius: 6px;
+  font-size: 14px; display: flex; align-items: center; gap: 8px;
+}
+.player-list .player-card .seat { color: #e94560; font-weight: bold; }
+.player-list .player-card .host-badge { font-size: 11px; color: #f0c040; background: #333; padding: 2px 6px; border-radius: 4px; }
+
+/* ========== 游戏三区布局 ========== */
+.game-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr 300px;
+  height: 100vh;
+  width: 100vw;
+  gap: 0;
+}
+@media (max-width: 768px) {
+  .game-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr auto;
+  }
+}
+
+/* 状态区 */
+.zone-status {
+  background: #111128; padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  border-right: 1px solid #1e1e3f;
+}
+.phase-display {
+  background: #1a1a3e; padding: 12px; border-radius: 8px; text-align: center;
+}
+.phase-display #phase-text { font-size: 18px; font-weight: bold; color: #e94560; }
+.timer-display { text-align: center; padding: 8px; }
+.timer-display #timer-text {
+  font-size: 48px; font-weight: bold; font-family: 'Courier New', monospace;
+  color: #f0c040;
+}
+.timer-display .timer-label { font-size: 12px; color: #888; }
+.player-status-list { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+.player-status-item {
+  padding: 6px 10px; border-radius: 4px; font-size: 13px;
+  display: flex; align-items: center; gap: 6px;
+}
+.player-status-item.alive { color: #4ade80; }
+.player-status-item.dead { color: #666; text-decoration: line-through; }
+.player-status-item.speaking { background: #1a2a4e; color: #fab; }
+.player-status-item.current-user { border-left: 3px solid #e94560; }
+
+/* 信息流 */
+.zone-feed { display: flex; flex-direction: column; background: #0a0a1a; }
+.feed-header {
+  padding: 12px 16px; background: #111128; border-bottom: 1px solid #1e1e3f;
+  font-size: 14px; font-weight: bold; color: #888;
+}
+.feed-messages {
+  flex: 1; overflow-y: auto; padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.msg { padding: 6px 10px; border-radius: 4px; font-size: 14px; line-height: 1.5; }
+.msg.system { color: #f0c040; font-style: italic; }
+.msg.speech { color: #e0e0e0; }
+.msg.speech .speaker { color: #4ade80; font-weight: bold; margin-right: 6px; }
+.msg.speech .speaker-self { color: #fab; }
+.msg.private { color: #f0c040; background: #1a1a2e; border-left: 3px solid #f0c040; }
+.msg.death { color: #ff6b6b; }
+.msg.result { color: #4ade80; font-weight: bold; font-size: 16px; text-align: center; padding: 12px; }
+
+/* 操作区 */
+.zone-action {
+  background: #111128; padding: 16px; border-left: 1px solid #1e1e3f;
+  display: flex; flex-direction: column;
+}
+.action-panel { flex: 1; display: flex; flex-direction: column; }
+.waiting-text { color: #666; text-align: center; margin: auto; font-size: 15px; }
+
+/* 发言模式 */
+.speech-area { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.speech-area textarea {
+  flex: 1; padding: 12px; border: 1px solid #333; border-radius: 6px;
+  background: #1a1a2e; color: #fff; font-size: 15px; resize: none; outline: none;
+  min-height: 100px;
+}
+.speech-area textarea:focus { border-color: #e94560; }
+.speech-actions { display: flex; gap: 8px; }
+.speech-actions .btn-send { flex: 1; background: #e94560; color: #fff; }
+.speech-actions .btn-end { background: #333; color: #888; }
+
+/* 投票模式 */
+.vote-area { display: flex; flex-direction: column; gap: 8px; }
+.vote-area .vote-title { font-size: 16px; font-weight: bold; margin-bottom: 8px; }
+.vote-targets { display: flex; flex-direction: column; gap: 4px; }
+.vote-target {
+  padding: 8px 12px; background: #1a1a2e; border: 1px solid #333; border-radius: 6px;
+  cursor: pointer; font-size: 14px; color: #e0e0e0; text-align: left;
+}
+.vote-target:hover { border-color: #e94560; background: #16213e; }
+.vote-target:disabled { opacity: 0.4; cursor: not-allowed; }
+.vote-target.selected { border-color: #e94560; background: #2a1a2e; }
+
+/* 夜间模式 */
+.night-area { display: flex; flex-direction: column; gap: 12px; }
+.night-area .night-title { font-size: 16px; font-weight: bold; color: #8888cc; }
+.night-area .skill-name { font-size: 14px; color: #aaa; }
+.night-area select {
+  padding: 8px; background: #1a1a2e; border: 1px solid #333; border-radius: 6px;
+  color: #fff; font-size: 14px;
+}
+.night-area .btn-confirm { background: #4a4a8a; color: #fff; padding: 8px; border: none; border-radius: 6px; cursor: pointer; }
