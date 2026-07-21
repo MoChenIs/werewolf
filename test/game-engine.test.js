@@ -75,3 +75,37 @@ console.assert(dayResult2.deaths.length === 0, '女巫解救后应无人死亡')
 console.log('✓ 女巫解救测试通过');
 
 console.log('\n所有 FSM 流转测试通过!');
+
+// 测试发言和投票逻辑
+const room4 = createMockRoom(6);
+const engine4 = new GameEngine(room4);
+engine4.assignRoles();
+// 所有人都存活
+Array.from(room4.players.values()).forEach(p => p.isAlive = true);
+const voteResult = engine4.startFreeSpeech();
+console.assert(voteResult.phase === 'free_speech', '发言阶段应为 free_speech');
+console.log('✓ 发言阶段启动测试通过');
+
+// 模拟投票
+engine4.phase = 'vote';
+engine4.votes = { 1: 3, 2: 3, 3: 5, 4: 3, 5: 5, 6: 3 };
+const execResult = engine4.executeVote();
+console.assert(execResult.eliminated.seat === 3, '3号应被放逐（4票）');
+console.assert(
+  Array.from(room4.players.values()).find(p => p.seat === 3).isAlive === false,
+  '3号应标记为死亡'
+);
+console.log('✓ 投票计票测试通过');
+
+// 测试平票
+const room5 = createMockRoom(6);
+const engine5 = new GameEngine(room5);
+engine5.assignRoles();
+Array.from(room5.players.values()).forEach(p => p.isAlive = true);
+engine5.phase = 'vote';
+engine5.votes = { 1: 2, 2: 3, 3: 2, 4: 3, 5: 1, 6: 1 };
+const tieResult = engine5.executeVote();
+console.assert(tieResult.isTie === true, '平票应返回 isTie');
+console.log('✓ 平票处理测试通过');
+
+console.log('\n所有发言/投票测试通过!');

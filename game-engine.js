@@ -207,7 +207,14 @@ class GameEngine {
     });
 
     if (!maxTarget || maxVotes === 0) {
-      this.addLog('system', '无人被放逐（平票或全部弃权）');
+      this.addLog('system', '无人被放逐（全部弃权）');
+      return { phase: 'free_speech', eliminated: null, isTie: true };
+    }
+
+    // 检测平票：是否有多个候选人获得相同最高票数
+    const topCandidates = Object.entries(tally).filter(([_, count]) => count === maxVotes);
+    if (topCandidates.length > 1) {
+      this.addLog('system', `无人被放逐（平票）`);
       return { phase: 'free_speech', eliminated: null, isTie: true };
     }
 

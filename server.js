@@ -91,6 +91,87 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 房主开始白天发言
+  socket.on('start_free_speech', () => {
+    const room = roomManager.findRoomBySocket(socket.id);
+    if (!room || room.host !== socket.id) return;
+    const engine = room.game;
+    if (!engine || engine.phase !== 'dawn_death_announce') return;
+
+    const result = engine.startFreeSpeech();
+    io.to(room.id).emit('phase_change', { phase: 'free_speech', message: '自由发言开始' });
+    startSpeechTimerForSpeaker(room, io);
+  });
+
+  // 玩家提交发言
+  socket.on('player_speech', ({ content }) => {
+    const room = roomManager.findRoomBySocket(socket.id);
+    if (!room || !room.game) return;
+    const engine = room.game;
+    const player = room.players.get(socket.id);
+    if (!player || !player.isAlive) return;
+    if (engine.phase !== 'free_speech') return;
+
+    const expectedSeat = engine.dayOrder[engine.currentSpeaker];
+    if (player.seat !== expectedSeat) return;
+
+    // 敏感词过滤
+    const filtered = filterSensitiveWords(content);
+
+    io.to(room.id).emit('speech_broadcast', {
+      seat: player.seat,
+      name: player.name,
+      content: filtered
+    });
+    engine.addLog('speech', `${player.seat}号发言: ${filtered}`, player.seat);
+  });
+
+  // 提前结束发言
+  socket.on('end_speech', () => {
+    const room = roomManager.findRoomBySocket(socket.id);
+    if (!room || !room.game) return;
+    const engine = room.game;
+    if (engine.phase !== 'free_speech') return;
+    const player = room.players.get(socket.id);
+    if (!player) return;
+
+    const expectedSeat = engine.dayOrder[engine.currentSpeaker];
+    if (player.seat !== expectedSeat) return;
+
+    clearTimeout(room._speechTimer);
+    const next = engine.nextSpeaker();
+    handleSpeechTransition(room, io, next);
+  });
+
+  // 投票
+  socket.on('vote', ({ targetSeat }) => {
+    const room = roomManager.findRoomBySocket(socket.id);
+    if (!room || !room.game) return;
+    const engine = room.game;
+    const player = room.players.get(socket.id);
+    if (!player || !player.isAlive) return;
+    if (engine.phase !== 'vote') return;
+
+    engine.votes[player.seat] = targetSeat;
+    player.hasVoted = true;
+    player.voteTarget = targetSeat;
+
+    io.to(room.id).emit('vote_update', {
+      seat: player.seat,
+      target: targetSeat,
+      totalVoters: Object.keys(engine.votes).length,
+      totalAlive: Array.from(room.players.values()).filter(p => p.isAlive).length
+    });
+
+    // 所有人投票完毕，统计结果
+    const aliveCount = Array.from(room.players.values()).filter(p => p.isAlive).length;
+    if (Object.keys(engine.votes).length >= aliveCount) {
+      clearTimeout(room._voteTimer);
+      const result = engine.executeVote();
+      handleVoteResult(room, io, result);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`[断开] 玩家断开: ${socket.id}`);
     const result = roomManager.leaveRoom(socket.id);
@@ -102,6 +183,106 @@ io.on('connection', (socket) => {
     }
   });
 });
+
+// ========== 辅助函数 ==========
+
+const sensitiveWords = require('./sensitive-words.json');
+
+function filterSensitiveWords(content) {
+  let filtered = content;
+  sensitiveWords.forEach(word => {
+    const regex = new RegExp(word, 'gi');
+    filtered = filtered.replace(regex, '***');
+  });
+  return filtered;
+}
+
+function startSpeechTimerForSpeaker(room, io) {
+  const engine = room.game;
+  const speakerSeat = engine.dayOrder[engine.currentSpeaker];
+  const speaker = Array.from(room.players.values()).find(p => p.seat === speakerSeat);
+
+  io.to(room.id).emit('timer_sync', {
+    startTimestamp: engine.speechStartTime,
+    duration: engine.speechDuration
+  });
+  io.to(room.id).emit('your_turn', {
+    seat: speakerSeat,
+    action: 'speech',
+    timeLimit: engine.speechDuration,
+    isYou: false
+  });
+  if (speaker) {
+    io.to(speaker.id).emit('your_turn', {
+      seat: speakerSeat,
+      action: 'speech',
+      timeLimit: engine.speechDuration,
+      isYou: true
+    });
+  }
+
+  // 90秒后自动结束发言
+  room._speechTimer = setTimeout(() => {
+    if (engine.phase !== 'free_speech') return;
+    const next = engine.nextSpeaker();
+    handleSpeechTransition(room, io, next);
+  }, engine.speechDuration);
+}
+
+function handleSpeechTransition(room, io, next) {
+  if (next.phase === 'vote') {
+    io.to(room.id).emit('phase_change', {
+      phase: 'vote',
+      message: '发言结束，开始放逐投票'
+    });
+    // 30秒投票倒计时
+    room._voteTimer = setTimeout(() => {
+      if (room.game.phase !== 'vote') return;
+      const result = room.game.executeVote();
+      handleVoteResult(room, io, result);
+    }, room.game.voteDuration);
+  } else {
+    startSpeechTimerForSpeaker(room, io);
+  }
+}
+
+function handleVoteResult(room, io, result) {
+  if (result.phase === 'final_words') {
+    io.to(room.id).emit('phase_change', {
+      phase: 'final_words',
+      eliminated: result.eliminated
+    });
+    // 60s 遗言后进入下一环节
+    setTimeout(() => {
+      const next = room.game.afterFinalWords();
+      if (next.phase === 'settlement') {
+        io.to(room.id).emit('game_over', {
+          winner: next.winner,
+          message: next.message,
+          roles: Array.from(room.players.values()).map(p => ({
+            seat: p.seat, name: p.name, role: p.role
+          }))
+        });
+        room.status = 'ended';
+      } else {
+        handleNightPhase(room, io, next);
+      }
+    }, 60000);
+  } else if (result.phase === 'free_speech') {
+    // 平票，重新发言和投票
+    const next = room.game.startFreeSpeech();
+    io.to(room.id).emit('phase_change', { phase: 'free_speech', message: '平票，重新发言' });
+    startSpeechTimerForSpeaker(room, io);
+  }
+}
+
+function handleNightPhase(room, io, result) {
+  io.to(room.id).emit('phase_change', {
+    phase: result.phase,
+    message: `第${room.game.round}夜，天黑请闭眼。`
+  });
+  // 具体夜间角色通知在 Task 8 中实现
+}
 
 server.listen(PORT, () => {
   console.log(`[启动] 狼人杀服务器运行在 http://localhost:${PORT}`);
