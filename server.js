@@ -878,7 +878,7 @@ function handleNightPhase(room, io, result) {
  });
  }
 
- // 天亮消息 → 自动开始讨论
+ // 天亮 → 直接进入讨论，不经过中间态
  if (result.phase === 'dawn_death_announce') {
  // 夜间死亡后检查会议是否结束
  if (checkAndHandleGameEnd(room, io)) return;
@@ -886,19 +886,20 @@ function handleNightPhase(room, io, result) {
  // 猎人夜间死亡触发被动（不暴露身份）
  triggerHunterPassive(room, io, false);
 
+ // 立即开始讨论
+ const speechResult = engine.startFreeSpeech();
  const deaths = result.deaths || [];
  const deathMsg = deaths.length
  ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join(' ')}`
  : '天亮了，昨晚是平安夜';
  io.to(room.id).emit('phase_change', {
- phase: result.phase, deaths,
+ phase: 'free_speech', deaths,
  message: ` ${deathMsg}`,
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
  });
- // 2 秒后自动开始讨论
- setTimeout(() => autoStartSpeech(room, io), 2000);
+ startSpeechTimerForSpeaker(room, io);
  return;
  }
 
@@ -980,18 +981,19 @@ function handleNightPhase(room, io, result) {
  }
  if (checkAndHandleGameEnd(room, io)) return;
  triggerHunterPassive(room, io, false);
- const deaths = nextPhase.deaths || [];
- const deathMsg = deaths.length
- ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join(' ')}`
+ const deaths_t = nextPhase.deaths || [];
+ const deathMsg_t = deaths_t.length
+ ? `天亮了，昨晚 ${deaths_t.map(d => `${d.seat}号成员死亡`).join(' ')}`
  : '天亮了，昨晚是平安夜';
+ room.game.startFreeSpeech();
  io.to(room.id).emit('phase_change', {
- phase: nextPhase.phase, deaths,
- message: ` ${deathMsg}`,
+ phase: 'free_speech', deaths: deaths_t,
+ message: ` ${deathMsg_t}`,
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
  });
- setTimeout(() => autoStartSpeech(room, io), 2000);
+ startSpeechTimerForSpeaker(room, io);
  } else {
  handleNightPhase(room, io, nextPhase);
  }
@@ -1214,18 +1216,19 @@ function autoProcessAiNight(room, io) {
  }
  if (checkAndHandleGameEnd(room, io)) return;
  triggerHunterPassive(room, io, false);
- const deaths = next.deaths || [];
- const deathMsg = deaths.length
- ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join(' ')}`
+ const deaths_a = next.deaths || [];
+ const deathMsg_a = deaths_a.length
+ ? `天亮了，昨晚 ${deaths_a.map(d => `${d.seat}号成员死亡`).join(' ')}`
  : '天亮了，昨晚是平安夜';
+ room.game.startFreeSpeech();
  io.to(room.id).emit('phase_change', {
- phase: next.phase, deaths,
- message: ` ${deathMsg}`,
+ phase: 'free_speech', deaths: deaths_a,
+ message: ` ${deathMsg_a}`,
  players: Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
  });
-  setTimeout(() => autoStartSpeech(room, io), 2000);
+ startSpeechTimerForSpeaker(room, io);
  } else {
  // 夜间下一阶段：handleNightPhase 统一发「结束+开始」
  handleNightPhase(room, io, next);

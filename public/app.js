@@ -663,7 +663,14 @@ function endSpeech() {
 }
 
 function exitGame() {
- if (confirm('确认退出会议室？')) socket.emit('leave_room');
+ document.getElementById('modal-overlay').classList.remove('hidden');
+}
+function confirmExit() {
+ document.getElementById('modal-overlay').classList.add('hidden');
+ socket.emit('leave_room');
+}
+function closeModal() {
+ document.getElementById('modal-overlay').classList.add('hidden');
 }
 
 function castVote(targetSeat) {

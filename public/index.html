@@ -8,6 +8,15 @@
 </head>
 <body>
   <div id="global-toast" class="toast-error hidden"></div>
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal-card">
+      <p class="modal-text">确认退出会议室？</p>
+      <div class="modal-actions">
+        <button class="btn btn-primary btn-sm modal-confirm" onclick="confirmExit()">确认</button>
+        <button class="btn btn-secondary btn-sm" onclick="closeModal()">取消</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 大厅 -->
   <div id="lobby-page" class="page">
