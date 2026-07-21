@@ -140,7 +140,7 @@ class GameEngine {
  this.votes = {};
  // 计算死者
  const deaths = this.calculateDeaths();
- this.addLog('death', `昨晚 ${deaths.length > 0 ? deaths.map(d => `${d.seat}号 ${d.name}`).join('、') : '平安夜'}死亡`);
+ this.addLog('death', `昨晚 ${deaths.length > 0 ? deaths.map(d => `${d.seat}号 ${d.name}`).join(' ') : '平安夜'}死亡`);
  return { phase: this.phase, deaths, isDay: true, prevPhase };
  }
 
@@ -257,7 +257,7 @@ class GameEngine {
  this.tieOrder = [...tiedSeats];
  this.currentTieSpeaker = 0;
  this.speechStartTime = Date.now();
- this.addLog('system', `同票候选人发言：${tiedSeats.map(s => s + '号').join('、')}`);
+ this.addLog('system', `同票候选人发言：${tiedSeats.map(s => s + '号').join(' ')}`);
  return { speaker: this.tieOrder[0] };
  }
 

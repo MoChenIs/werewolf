@@ -227,14 +227,14 @@ socket.on('vote_result', (data) => {
  const sorted = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
 
  const lines = sorted.map(([target, voters]) => {
- const votersStr = voters.map(s => `${s}号`).join('、');
+ const votersStr = voters.map(s => `${s}号`).join(' ');
  if (target === '弃权') return `弃权：${voters.length} 票（${votersStr}）`;
  const name = nameMap[target] || '';
  return `${target}号：${voters.length} 票（${votersStr}）`;
  });
  addMessage('system', `表决结果：\n${lines.join('\n')}`);
  if (data.isTie && data.tiedSeats.length) {
- addMessage('system', `平票：${data.tiedSeats.map(s => s + '号 ' + (nameMap[s] || '')).join('、')}`);
+ addMessage('system', `平票：${data.tiedSeats.map(s => s + '号 ' + (nameMap[s] || '')).join(' ')}`);
  }
 });
 
@@ -292,7 +292,7 @@ function playAgain() {
 // 夜间队友信息
 socket.on('night_teammates', (data) => {
  if (data.teammates && data.teammates.length > 0) {
- addMessage('private', ` 同组：${data.teammates.map(t => `${t.seat}号 ${t.name}`).join('、')}`);
+ addMessage('private', ` 同组：${data.teammates.map(t => `${t.seat}号 ${t.name}`).join(' ')}`);
  } else {
  addMessage('private', ' 无同组人员');
  }
@@ -497,7 +497,7 @@ function updateActionPanel(phase) {
  if (phase === 'tie_vote' && _tiedSeats.length) {
  // 同票重投：只显示候选人
  targets = _cachedPlayers.filter(p => _tiedSeats.includes(p.seat) && p.seat !== currentSeat);
- title = ` 请表决 - 在 ${_tiedSeats.map(s => s + '号').join('、')} 中选择`;
+ title = ` 请表决 - 在 ${_tiedSeats.map(s => s + '号').join(' ')} 中选择`;
  } else {
  targets = _cachedPlayers.filter(p => p.isAlive && p.seat !== currentSeat);
  title = ' 请表决';

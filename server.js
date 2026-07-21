@@ -719,7 +719,7 @@ function handleVoteResult(room, io, result) {
  const tieResult = room.game.startTieBreak(result.tiedSeats);
  io.to(room.id).emit('phase_change', {
  phase: 'tie_speech',
- message: `同票：${result.tiedSeats.map(s => s + '号').join('、')} 各发言一轮`,
+ message: `同票：${result.tiedSeats.map(s => s + '号').join(' ')} 各发言一轮`,
  tiedSeats: result.tiedSeats
  });
  startTieSpeaker(room, io, tieResult.speaker);
@@ -888,7 +888,7 @@ function handleNightPhase(room, io, result) {
 
  const deaths = result.deaths || [];
  const deathMsg = deaths.length
- ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join('、')}`
+ ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join(' ')}`
  : '天亮了，昨晚是平安夜';
  io.to(room.id).emit('phase_change', {
  phase: result.phase, deaths,
@@ -982,7 +982,7 @@ function handleNightPhase(room, io, result) {
  triggerHunterPassive(room, io, false);
  const deaths = nextPhase.deaths || [];
  const deathMsg = deaths.length
- ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join('、')}`
+ ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join(' ')}`
  : '天亮了，昨晚是平安夜';
  io.to(room.id).emit('phase_change', {
  phase: nextPhase.phase, deaths,
@@ -1189,7 +1189,7 @@ function autoProcessAiNight(room, io) {
  triggerHunterPassive(room, io, false);
  const deaths = next.deaths || [];
  const deathMsg = deaths.length
- ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join('、')}`
+ ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join(' ')}`
  : '天亮了，昨晚是平安夜';
  io.to(room.id).emit('phase_change', {
  phase: next.phase, deaths,
