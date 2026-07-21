@@ -114,7 +114,8 @@ class RoomManager {
       seat: p.seat,
       name: p.name,
       isAlive: p.isAlive,
-      disconnected: p.disconnected
+      disconnected: p.disconnected,
+      isHost: room.host === p.id
     }));
     players.sort((a, b) => a.seat - b.seat);
     return {
