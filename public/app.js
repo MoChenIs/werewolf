@@ -124,7 +124,13 @@ socket.on('timer_sync', (data) => {
 socket.on('your_turn', (data) => {
   _currentSpeakerSeat = data.seat;
   if (data.isYou) {
-    addMessage('system', `🎤 轮到你了！`);
+    if (data.action === 'speech') {
+      addMessage('system', '🎤 轮到你了！请在规定时间内发言');
+    } else if (data.action === 'night_kill' || data.action === 'investigate' || data.action === 'shoot' || data.action === 'witch') {
+      _myNightPhase = currentPhase;
+      addMessage('system', `🌙 请行动`);
+      updateActionPanel(currentPhase);
+    }
   }
 });
 
@@ -187,6 +193,23 @@ socket.on('night_teammates', (data) => {
 // 夜间行动结果
 socket.on('night_result', (data) => {
   addMessage('private', `🔔 ${data.message}`);
+});
+
+// 女巫信息
+socket.on('witch_info', (data) => {
+  const infoEl = document.getElementById('witch-info');
+  if (!infoEl) return;
+  if (data.tonightKilled) {
+    infoEl.innerHTML = `今晚被狼人击杀的是 <strong>${data.tonightKilled.seat}号 ${data.tonightKilled.name}</strong>`;
+  } else {
+    infoEl.innerHTML = '今晚无人被狼人击杀';
+  }
+  if (document.getElementById('witch-use-save')) {
+    document.getElementById('witch-use-save').disabled = !data.hasSave;
+  }
+  if (document.getElementById('witch-use-kill')) {
+    document.getElementById('witch-use-kill').disabled = !data.hasKill;
+  }
 });
 
 // 更新玩家列表
@@ -297,8 +320,101 @@ function updateActionPanel(phase) {
       }
       break;
 
+    case 'night_werewolf':
+    case 'night_seer':
+    case 'night_witch':
+    case 'night_hunter':
+      renderNightAction(phase, panel);
+      break;
+
     default:
       panel.innerHTML = `<p class="waiting-text">⏳ 请等待其他玩家行动...</p>`;
+  }
+}
+
+function renderNightAction(phase, panel) {
+  const isMyPhase = _myNightPhase === phase;
+
+  if (!isMyPhase) {
+    panel.innerHTML = `<p class="waiting-text">🌙 等待其他玩家行动...</p>`;
+    return;
+  }
+
+  const targets = _cachedPlayers.filter(p => p.isAlive && p.seat !== currentSeat);
+
+  switch (phase) {
+    case 'night_werewolf':
+      panel.innerHTML = `
+        <div class="night-area">
+          <div class="night-title">🐺 狼人行动</div>
+          <p class="skill-name">选择今晚要击杀的玩家</p>
+          <select id="night-target">
+            ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
+          </select>
+          <button class="btn-confirm" onclick="submitNightAction('kill')">确认击杀</button>
+        </div>
+      `;
+      break;
+
+    case 'night_seer':
+      panel.innerHTML = `
+        <div class="night-area">
+          <div class="night-title">🔮 预言家查验</div>
+          <p class="skill-name">选择要查验的玩家</p>
+          <select id="night-target">
+            ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
+          </select>
+          <button class="btn-confirm" onclick="submitNightAction('investigate')">确认查验</button>
+        </div>
+      `;
+      break;
+
+    case 'night_witch':
+      panel.innerHTML = `
+        <div class="night-area">
+          <div class="night-title">🧪 女巫行动</div>
+          <div id="witch-info" class="witch-info">加载中...</div>
+          <div class="witch-actions" style="margin-top:12px;">
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <input type="checkbox" id="witch-use-save"> 使用解药
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <input type="checkbox" id="witch-use-kill"> 使用毒药
+            </label>
+            <div id="witch-kill-target-wrapper" class="hidden" style="margin-bottom:8px;">
+              <p class="skill-name">选择毒杀目标</p>
+              <select id="night-target">
+                ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <button class="btn-confirm" onclick="submitWitchAction()">确认行动</button>
+        </div>
+      `;
+      // 毒药复选框切换显示目标选择
+      setTimeout(() => {
+        const killCheck = document.getElementById('witch-use-kill');
+        if (killCheck) {
+          killCheck.addEventListener('change', function() {
+            document.getElementById('witch-kill-target-wrapper')
+              .classList.toggle('hidden', !this.checked);
+          });
+        }
+      }, 100);
+      break;
+
+    case 'night_hunter':
+      panel.innerHTML = `
+        <div class="night-area">
+          <div class="night-title">🔫 猎人行动</div>
+          <p class="skill-name">选择要带走的玩家</p>
+          <select id="night-target">
+            ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
+          </select>
+          <button class="btn-confirm" onclick="submitNightAction('shoot')">确认带走</button>
+        </div>
+      `;
+      break;
   }
 }
 
@@ -352,6 +468,19 @@ function castVote(targetSeat) {
     el.classList.toggle('selected', parseInt(el.dataset.seat) === targetSeat);
   });
   socket.emit('vote', { targetSeat });
+}
+
+// ========== 夜间行动函数 ==========
+function submitNightAction(type) {
+  const target = parseInt(document.getElementById('night-target').value);
+  socket.emit('night_action', { target, action: type });
+}
+
+function submitWitchAction() {
+  const useSave = document.getElementById('witch-use-save').checked;
+  const useKill = document.getElementById('witch-use-kill').checked;
+  const killTarget = useKill ? parseInt(document.getElementById('night-target').value) : null;
+  socket.emit('night_action', { action: 'witch', save: useSave, killTarget });
 }
 
 // ========== 房间事件中缓存玩家列表 ==========

@@ -4,6 +4,10 @@ const { Server } = require('socket.io');
 const path = require('path');
 const RoomManager = require('./room-manager');
 const { GameEngine } = require('./game-engine');
+const { processWerewolfAction, getWerewolfTargets } = require('./roles/werewolf');
+const { processSeerAction, getSeerTargets } = require('./roles/seer');
+const { processWitchAction, getWitchInfo } = require('./roles/witch');
+const { processHunterAction, getHunterTargets } = require('./roles/hunter');
 
 const app = express();
 const server = http.createServer(app);
@@ -172,6 +176,92 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 夜间行动
+  socket.on('night_action', ({ target, action, save, killTarget }) => {
+    const room = roomManager.findRoomBySocket(socket.id);
+    if (!room || !room.game) return;
+    const engine = room.game;
+
+    let result;
+    switch (action) {
+      case 'kill':
+        result = processWerewolfAction(engine, socket.id, target);
+        if (result.success) {
+          const werewolves = engine.getWerewolves().filter(w => w.isAlive);
+          werewolves.forEach(w => {
+            io.to(w.id).emit('night_result', { message: `狼人已选择击杀 ${result.target}号玩家` });
+          });
+          const next = engine.advanceNight();
+          if (!next.isNight) {
+            io.to(room.id).emit('phase_change', {
+              phase: next.phase, deaths: next.deaths,
+              message: '天亮了',
+              players: Array.from(room.players.values()).map(p => ({
+                seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+              }))
+            });
+          } else {
+            handleNightPhase(room, io, next);
+          }
+        }
+        break;
+      case 'investigate':
+        result = processSeerAction(engine, socket.id, target);
+        if (result.success) {
+          io.to(socket.id).emit('night_result', { message: result.message });
+          const next = engine.advanceNight();
+          if (!next.isNight) {
+            io.to(room.id).emit('phase_change', {
+              phase: next.phase, deaths: next.deaths, message: '天亮了',
+              players: Array.from(room.players.values()).map(p => ({
+                seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+              }))
+            });
+          } else {
+            handleNightPhase(room, io, next);
+          }
+        }
+        break;
+      case 'shoot':
+        result = processHunterAction(engine, socket.id, target);
+        if (result.success) {
+          io.to(room.id).emit('death_announce', { seat: result.target.seat, name: result.target.name });
+          io.to(room.id).emit('night_result', { message: result.message });
+          const next = engine.advanceNight();
+          if (!next.isNight) {
+            io.to(room.id).emit('phase_change', {
+              phase: next.phase, deaths: next.deaths, message: '天亮了',
+              players: Array.from(room.players.values()).map(p => ({
+                seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+              }))
+            });
+          }
+        }
+        break;
+      case 'witch':
+        result = processWitchAction(engine, socket.id, { save, killTarget });
+        if (result.success) {
+          io.to(socket.id).emit('night_result', { message: result.message });
+          const next = engine.advanceNight();
+          if (!next.isNight) {
+            io.to(room.id).emit('phase_change', {
+              phase: next.phase, deaths: next.deaths, message: '天亮了',
+              players: Array.from(room.players.values()).map(p => ({
+                seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+              }))
+            });
+          } else {
+            handleNightPhase(room, io, next);
+          }
+        }
+        break;
+    }
+
+    if (result && result.error) {
+      socket.emit('error', { code: 'ACTION_FAILED', message: result.error });
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`[断开] 玩家断开: ${socket.id}`);
     const result = roomManager.leaveRoom(socket.id);
@@ -277,11 +367,87 @@ function handleVoteResult(room, io, result) {
 }
 
 function handleNightPhase(room, io, result) {
+  const engine = room.game;
   io.to(room.id).emit('phase_change', {
     phase: result.phase,
-    message: `第${room.game.round}夜，天黑请闭眼。`
+    message: result.message || `第${room.game.round}夜，天黑请闭眼。`,
+    players: Array.from(room.players.values()).map(p => ({
+      seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+    }))
   });
-  // 具体夜间角色通知在 Task 8 中实现
+
+  // 通知对应角色行动
+  room.players.forEach((player) => {
+    let shouldAct = false;
+    let actionData = null;
+
+    switch (engine.phase) {
+      case 'night_werewolf':
+        if (player.role === 'werewolf' && player.isAlive) {
+          shouldAct = true;
+          actionData = {
+            action: 'night_kill',
+            targets: getWerewolfTargets(engine)
+          };
+        }
+        break;
+      case 'night_seer':
+        if (player.role === 'seer' && player.isAlive) {
+          shouldAct = true;
+          actionData = {
+            action: 'investigate',
+            targets: getSeerTargets(engine)
+          };
+        }
+        break;
+      case 'night_witch':
+        if (player.role === 'witch' && player.isAlive) {
+          shouldAct = true;
+          actionData = {
+            action: 'witch',
+            info: getWitchInfo(engine, player.id)
+          };
+          io.to(player.id).emit('witch_info', actionData.info);
+        }
+        break;
+      case 'night_hunter':
+        if (player.role === 'hunter' && !player.isAlive) {
+          shouldAct = true;
+          actionData = {
+            action: 'shoot',
+            targets: getHunterTargets(engine)
+          };
+        }
+        break;
+    }
+
+    if (shouldAct) {
+      io.to(player.id).emit('your_turn', {
+        seat: player.seat,
+        action: actionData.action,
+        isYou: true,
+        ...actionData
+      });
+    }
+  });
+
+  // 设置超时（20秒后自动跳过夜间）
+  room._nightTimer = setTimeout(() => {
+    if (engine.phase.startsWith('night_')) {
+      const nextPhase = engine.advanceNight();
+      if (nextPhase.isDay) {
+        io.to(room.id).emit('phase_change', {
+          phase: nextPhase.phase, deaths: nextPhase.deaths,
+          message: '天亮了',
+          players: Array.from(room.players.values()).map(p => ({
+            seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+          }))
+        });
+      } else {
+        handleNightPhase(room, io, nextPhase);
+      }
+    }
+  }, engine.nightDuration);
 }
 
 server.listen(PORT, () => {
