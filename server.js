@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const RoomManager = require('./room-manager');
+const { GameEngine } = require('./game-engine');
 
 const app = express();
 const server = http.createServer(app);
@@ -47,6 +48,46 @@ io.on('connection', (socket) => {
       if (result.newHost) {
         io.to(result.roomId).emit('host_changed', { newHost: result.newHost });
       }
+    }
+  });
+
+  // 开始游戏
+  socket.on('start_game', () => {
+    const room = roomManager.findRoomBySocket(socket.id);
+    if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '你不在房间中' });
+    if (room.host !== socket.id) return socket.emit('error', { code: 'NOT_HOST', message: '只有房主可以开始游戏' });
+    if (room.players.size < 4) return socket.emit('error', { code: 'NOT_ENOUGH', message: '至少需要4名玩家' });
+
+    const engine = new GameEngine(room);
+    room.game = engine;
+    room.status = 'playing';
+    engine.startGame();
+
+    // 私密发送身份
+    room.players.forEach((player) => {
+      io.to(player.id).emit('game_started', { role: player.role });
+    });
+
+    // 广播游戏开始
+    io.to(room.id).emit('phase_change', {
+      phase: 'night_werewolf',
+      message: '天黑请闭眼，狼人请行动...'
+    });
+
+    // 告知狼人队友
+    const werewolves = engine.getWerewolves();
+    const werewolfSeats = werewolves.map(w => ({ seat: w.seat, name: w.name }));
+    werewolves.forEach(w => {
+      io.to(w.id).emit('night_teammates', { teammates: werewolfSeats.filter(t => t.seat !== w.seat) });
+    });
+
+    // 通知狼人行动
+    const firstWerewolf = werewolves[0];
+    if (firstWerewolf) {
+      io.to(firstWerewolf.id).emit('your_turn', {
+        action: 'night_kill',
+        targets: Array.from(room.players.values()).filter(p => p.isAlive).map(p => ({ seat: p.seat, name: p.name }))
+      });
     }
   });
 

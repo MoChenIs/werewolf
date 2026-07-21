@@ -49,3 +49,29 @@ console.assert(endResult3.ended === true, '好人与狼人人数均等应结束'
 console.log('✓ 狼人胜利判定测试通过');
 
 console.log('\n所有 GameEngine 测试通过!');
+
+// 测试夜间到白天流转
+const room2 = createMockRoom(6);
+const engine2 = new GameEngine(room2);
+engine2.assignRoles();
+
+// 模拟夜间狼人杀4号
+engine2.nightActions.werewolfKill = 4;
+const dayResult = engine2.startDay();
+console.assert(dayResult.phase === 'dawn_death_announce', `天亮了应为 dawn_death_announce，实际 ${dayResult.phase}`);
+const deadPlayer = dayResult.deaths.find(d => d.seat === 4);
+console.assert(deadPlayer, '4号玩家应死亡');
+console.assert(Array.from(room2.players.values()).find(p => p.seat === 4).isAlive === false, '4号玩家应标记为死亡');
+console.log('✓ 夜间死者计算测试通过');
+
+// 测试女巫解救
+const room3 = createMockRoom(6);
+const engine3 = new GameEngine(room3);
+engine3.assignRoles();
+engine3.nightActions.werewolfKill = 3;
+engine3.nightActions.witchSave = 3; // 女巫救3号
+const dayResult2 = engine3.startDay();
+console.assert(dayResult2.deaths.length === 0, '女巫解救后应无人死亡');
+console.log('✓ 女巫解救测试通过');
+
+console.log('\n所有 FSM 流转测试通过!');
