@@ -196,10 +196,10 @@ body {
 /* 投票 */
 .vote-area { display: flex; flex-direction: column; gap: 6px; }
 .vote-area .vote-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--text); }
-.vote-targets { display: flex; flex-direction: column; gap: 3px; }
+.vote-targets { display: flex; flex-wrap: wrap; gap: 4px; }
 .vote-target {
-  padding: 6px 10px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-sm);
-  cursor: pointer; font-size: 12px; color: var(--text); text-align: left; transition: all 0.1s;
+  padding: 4px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  cursor: pointer; font-size: 12px; color: var(--text); white-space: nowrap; transition: all 0.1s;
 }
 .vote-target:hover { border-color: var(--primary); color: var(--primary); }
 .vote-target.selected { border-color: var(--primary); background: var(--primary-light); color: #92400e; }

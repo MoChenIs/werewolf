@@ -663,7 +663,7 @@ function endSpeech() {
 }
 
 function exitGame() {
- socket.emit('leave_room');
+ if (confirm('确认退出会议室？')) socket.emit('leave_room');
 }
 
 function castVote(targetSeat) {
