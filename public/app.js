@@ -152,9 +152,7 @@ socket.on('phase_change', (data) => {
  currentPhase = data.phase;
  document.getElementById('phase-text').textContent = getPhaseText(data.phase);
  if (data.deaths) {
- data.deaths.forEach(d => {
- addMessage('death', `${d.seat}号 ${d.name} 死亡`);
- });
+ // 死亡信息统一由 data.message 展示
  }
  if (data.message) {
  addMessage('system', data.message);

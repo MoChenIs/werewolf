@@ -124,12 +124,14 @@ io.on('connection', (socket) => {
  // 告知狼人队友
  const werewolves = engine.getWerewolves();
  const werewolfSeats = werewolves.map(w => ({ seat: w.seat, name: w.name }));
+
  werewolves.forEach(w => {
  io.to(w.id).emit('night_teammates', { teammates: werewolfSeats.filter(t => t.seat !== w.seat) });
  });
 
  // 通知所有狼人投票选择目标
  const targets = Array.from(room.players.values()).filter(p => p.isAlive).map(p => ({ seat: p.seat, name: p.name }));
+
  engine.werewolfVotes = {};
  werewolves.forEach(w => {
  io.to(w.id).emit('your_turn', {
@@ -606,6 +608,15 @@ function filterSensitiveWords(content) {
  return filtered;
 }
 
+// 天亮后自动开始讨论（无需房主点击）
+function autoStartSpeech(room, io) {
+ const engine = room.game;
+ if (!engine || engine.phase !== 'dawn_death_announce') return;
+ const result = engine.startFreeSpeech();
+ io.to(room.id).emit('phase_change', { phase: 'free_speech', message: '讨论开始' });
+ startSpeechTimerForSpeaker(room, io);
+}
+
 function startSpeechTimerForSpeaker(room, io) {
  const engine = room.game;
  const speakerSeat = engine.dayOrder[engine.currentSpeaker];
@@ -743,6 +754,7 @@ function handleVoteResult(room, io, result) {
  const rolesInfo = Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, role: p.role
  }));
+
  room.players.forEach((player) => {
  const isGood = player.role !== 'werewolf';
  const playerWon = (next.winner === 'good' && isGood) || (next.winner === 'werewolf' && !isGood);
@@ -830,6 +842,7 @@ function handleAfterFinalWords(room, io, engine) {
  const rolesInfo = Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, role: p.role
  }));
+
  room.players.forEach((player) => {
  const isGood = player.role !== 'werewolf';
  const playerWon = (next.winner === 'good' && isGood) || (next.winner === 'werewolf' && !isGood);
@@ -865,7 +878,7 @@ function handleNightPhase(room, io, result) {
  });
  }
 
- // 天亮消息
+ // 天亮消息 → 自动开始讨论
  if (result.phase === 'dawn_death_announce') {
  // 夜间死亡后检查游戏是否结束
  if (checkAndHandleGameEnd(room, io)) return;
@@ -875,8 +888,8 @@ function handleNightPhase(room, io, result) {
 
  const deaths = result.deaths || [];
  const deathMsg = deaths.length
- ? `${deaths.map(d => `${d.seat}号玩家死亡`).join('、')}`
- : ' 昨晚是平安夜';
+ ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号玩家死亡`).join('、')}`
+ : '天亮了，昨晚是平安夜';
  io.to(room.id).emit('phase_change', {
  phase: result.phase, deaths,
  message: ` ${deathMsg}`,
@@ -884,6 +897,8 @@ function handleNightPhase(room, io, result) {
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
  });
+ // 2 秒后自动开始讨论
+ setTimeout(() => autoStartSpeech(room, io), 2000);
  return;
  }
 
@@ -967,8 +982,8 @@ function handleNightPhase(room, io, result) {
  triggerHunterPassive(room, io, false);
  const deaths = nextPhase.deaths || [];
  const deathMsg = deaths.length
- ? `${deaths.map(d => `${d.seat}号玩家死亡`).join('、')}`
- : ' 昨晚是平安夜';
+ ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号玩家死亡`).join('、')}`
+ : '天亮了，昨晚是平安夜';
  io.to(room.id).emit('phase_change', {
  phase: nextPhase.phase, deaths,
  message: ` ${deathMsg}`,
@@ -976,6 +991,7 @@ function handleNightPhase(room, io, result) {
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
  });
+ setTimeout(() => autoStartSpeech(room, io), 2000);
  } else {
  handleNightPhase(room, io, nextPhase);
  }
@@ -994,6 +1010,7 @@ function checkAndHandleGameEnd(room, io) {
  const rolesInfo = Array.from(room.players.values()).map(p => ({
  seat: p.seat, name: p.name, role: p.role
  }));
+
  room.players.forEach((player) => {
  const isGood = player.role !== 'werewolf';
  const playerWon = (endCheck.winner === 'good' && isGood) || (endCheck.winner === 'werewolf' && !isGood);
@@ -1054,6 +1071,7 @@ function triggerHunterPassive(room, io, revealRole = true) {
  const targets = Array.from(room.players.values())
  .filter(p => p.isAlive && p.seat !== hunter.seat)
  .map(p => ({ seat: p.seat, name: p.name }));
+
 
  if (targets.length === 0) return;
 
@@ -1171,8 +1189,8 @@ function autoProcessAiNight(room, io) {
  triggerHunterPassive(room, io, false);
  const deaths = next.deaths || [];
  const deathMsg = deaths.length
- ? `${deaths.map(d => `${d.seat}号玩家死亡`).join('、')}`
- : ' 昨晚是平安夜';
+ ? `天亮了，昨晚 ${deaths.map(d => `${d.seat}号玩家死亡`).join('、')}`
+ : '天亮了，昨晚是平安夜';
  io.to(room.id).emit('phase_change', {
  phase: next.phase, deaths,
  message: ` ${deathMsg}`,
@@ -1180,6 +1198,7 @@ function autoProcessAiNight(room, io) {
  seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
  }))
  });
+  setTimeout(() => autoStartSpeech(room, io), 2000);
  } else {
  // 夜间下一阶段：handleNightPhase 统一发「结束+开始」
  handleNightPhase(room, io, next);
