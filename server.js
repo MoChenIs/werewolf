@@ -405,7 +405,7 @@ io.on('connection', (socket) => {
  target.isAlive = false;
  if (revealRole) {
  io.to(room.id).emit('death_announce', { seat: target.seat, name: target.name });
- io.to(room.id).emit('night_result', { message: ` 猎人指定${targetSeat}号 ${target.name}` });
+ io.to(room.id).emit('night_result', { message: ` 猎人带走了${targetSeat}号 ${target.name}` });
  }
  }
  }
@@ -1088,7 +1088,7 @@ function triggerHunterPassive(room, io, revealRole = true) {
  pick.isAlive = false;
  if (revealRole) {
  io.to(room.id).emit('death_announce', { seat: pick.seat, name: pick.name });
- io.to(room.id).emit('night_result', { message: ` 猎人指定${pick.seat}号 ${pick.name}` });
+ io.to(room.id).emit('night_result', { message: ` 猎人带走了${pick.seat}号 ${pick.name}` });
  }
  }
  return;

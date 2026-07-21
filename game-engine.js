@@ -87,15 +87,15 @@ class GameEngine {
 
  // 三狼全出局 → 好人胜利
  if (aliveWerewolves.length === 0) {
- return { ended: true, winner: 'good', message: '好人胜利' };
+ return { ended: true, winner: 'good', message: '狼人全部死亡，好人胜利' };
  }
  // 三成员全死 → 狼人胜利
  if (aliveVillagers.length === 0) {
- return { ended: true, winner: 'werewolf', message: '狼人胜利' };
+ return { ended: true, winner: 'werewolf', message: '所有平民死亡，狼人胜利' };
  }
  // 三神全死 → 狼人胜利
  if (aliveGods.length === 0) {
- return { ended: true, winner: 'werewolf', message: '狼人胜利' };
+ return { ended: true, winner: 'werewolf', message: '神职全部死亡，狼人胜利' };
  }
  return { ended: false };
  }
