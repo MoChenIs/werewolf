@@ -9,44 +9,46 @@
 <body>
   <div id="global-toast" class="toast-error hidden"></div>
 
-  <div class="app-layout">
-    <!-- 左侧：游戏内容 -->
-    <div class="left-panel">
-      <div id="lobby-page" class="page">
-        <div class="lobby-container">
-          <h1 class="app-title">协作工作台</h1>
-          <p class="app-subtitle">沟通 · 决策 · 反馈</p>
-          <div class="lobby-actions">
-            <div class="input-group">
-              <input type="text" id="player-name" placeholder="输入昵称" maxlength="8">
-            </div>
-            <div class="input-group">
-              <input type="text" id="room-id-input" placeholder="房间号" maxlength="6">
-              <button id="join-room-btn" class="btn btn-secondary">加入</button>
-            </div>
-            <div class="divider"><span>或</span></div>
-            <button id="create-room-btn" class="btn btn-primary">创建</button>
-          </div>
-          <div id="lobby-error" class="error-msg hidden"></div>
+  <!-- 大厅 / 房间（全宽） -->
+  <div id="lobby-page" class="page">
+    <div class="lobby-container">
+      <h1 class="app-title">协作工作台</h1>
+      <p class="app-subtitle">沟通 · 决策 · 反馈</p>
+      <div class="lobby-actions">
+        <div class="input-group">
+          <input type="text" id="player-name" placeholder="输入昵称" maxlength="8">
         </div>
-      </div>
-
-      <div id="room-page" class="page hidden">
-        <div class="room-header">
-          <span>房间: <strong id="room-id-display"></strong></span>
-          <span id="player-count-display">1/12</span>
-          <button id="add-ai-btn" class="btn btn-secondary btn-sm hidden">+AI</button>
-          <button id="start-game-btn" class="btn btn-primary btn-sm hidden">开始</button>
-          <button id="leave-room-btn" class="btn btn-sm leave-btn">离开</button>
+        <div class="input-group">
+          <input type="text" id="room-id-input" placeholder="房间号" maxlength="6">
+          <button id="join-room-btn" class="btn btn-secondary">加入</button>
         </div>
-        <div id="player-list" class="player-list"></div>
+        <div class="divider"><span>或</span></div>
+        <button id="create-room-btn" class="btn btn-primary">创建</button>
       </div>
+      <div id="lobby-error" class="error-msg hidden"></div>
+    </div>
+  </div>
 
-      <div id="game-page" class="page hidden">
+  <div id="room-page" class="page hidden">
+    <div class="room-header">
+      <span>房间: <strong id="room-id-display"></strong></span>
+      <span id="player-count-display">1/12</span>
+      <button id="add-ai-btn" class="btn btn-secondary btn-sm hidden">+AI</button>
+      <button id="start-game-btn" class="btn btn-primary btn-sm hidden">开始</button>
+      <button id="leave-room-btn" class="btn btn-sm leave-btn">离开</button>
+    </div>
+    <div id="player-list" class="player-list"></div>
+  </div>
+
+  <!-- 游戏界面（左50% + 右50%留空） -->
+  <div id="game-page" class="page hidden">
+    <div class="game-page-layout">
+      <div class="game-left">
         <div class="game-layout">
           <div class="zone-status">
             <div class="phase-display">
               <span id="phase-text">等待开始</span>
+              <button class="phase-exit-btn" onclick="exitGame()">退出</button>
             </div>
             <div class="timer-display">
               <span id="timer-text">--</span>
@@ -66,10 +68,8 @@
           </div>
         </div>
       </div>
+      <div class="game-right"></div>
     </div>
-
-    <!-- 右侧：留空 -->
-    <div class="right-panel"></div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

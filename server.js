@@ -67,19 +67,19 @@ io.on('connection', (socket) => {
  if (!room) return;
 
  if (room.status === 'playing') {
- // 游戏中离开 — 标记死亡不删除，避免游戏引擎出错
+ // 游戏中有人退出 → 游戏结束
  const player = room.players.get(socket.id);
  if (player) {
- player.isAlive = false;
- player.disconnected = true;
  socket.leave(room.id);
- io.to(room.id).emit('player_left', { seat: player.seat, name: player.name });
- io.to(room.id).emit('phase_change', {
- phase: room.game ? room.game.phase : 'playing',
- players: Array.from(room.players.values()).map(p => ({
- seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
- }))
+ room.players.forEach((p) => {
+ const isGood = p.role !== 'werewolf';
+ const playerWon = false;
+ io.to(p.id).emit('game_over', {
+ winner: 'none', message: `${player.name} 退出游戏，本局终止`, youWon: false,
+ roles: Array.from(room.players.values()).map(r => ({ seat: r.seat, name: r.name, role: r.role }))
  });
+ });
+ room.status = 'ended';
  socket.emit('left_room');
  }
  } else {

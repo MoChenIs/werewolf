@@ -465,7 +465,7 @@ function updateActionPanel(phase) {
  <textarea id="speech-input" placeholder="输入你的发言内容..." maxlength="200"></textarea>
  <div class="speech-actions">
  <button class="btn btn-send" onclick="sendSpeech()">发送</button>
- <button class="btn btn-end" onclick="endSpeech()">结束发言</button>
+ <button class="btn btn-end" onclick="exitGame()">退出房间</button>
  </div>
  </div>
  `;
@@ -662,6 +662,10 @@ function sendSpeech() {
 
 function endSpeech() {
  socket.emit('end_speech');
+}
+
+function exitGame() {
+ socket.emit('leave_room');
 }
 
 function castVote(targetSeat) {

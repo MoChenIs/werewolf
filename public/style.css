@@ -9,13 +9,13 @@ body {
 }
 .hidden { display: none !important; }
 
-/* ========== 左右分栏 ========== */
-.app-layout {
+/* ========== 游戏页左右分栏 ========== */
+.game-page-layout {
   display: flex;
   width: 100vw;
   height: 100vh;
 }
-.left-panel {
+.game-left {
   width: 50vw;
   min-width: 480px;
   height: 100vh;
@@ -24,7 +24,7 @@ body {
   border-right: 1px solid #e8e8e8;
   background: #fff;
 }
-.right-panel {
+.game-right {
   flex: 1;
   height: 100vh;
   background: #f0f2f5;
@@ -33,7 +33,10 @@ body {
 /* ========== 页面容器 ========== */
 .page { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 #room-page { flex-direction: column; gap: 16px; padding: 24px; }
-#game-page { display: block; }
+#game-page { display: block; padding: 0; }
+#game-page .game-page-layout { width: 100%; height: 100%; }
+#game-page .game-left { height: 100%; }
+#game-page .game-layout { height: 100%; }
 
 /* ========== 大厅 ========== */
 .lobby-container { text-align: center; padding: 32px; max-width: 380px; }
@@ -110,8 +113,16 @@ body {
   background: #fafafa; padding: 12px; display: flex; flex-direction: column; gap: 10px;
   border-right: 1px solid #e8e8e8; min-height: 0;
 }
-.phase-display { background: #fff; padding: 8px 10px; border-radius: 4px; text-align: center; border: 1px solid #e8e8e8; }
+.phase-display {
+  background: #fff; padding: 8px 10px; border-radius: 4px; text-align: center;
+  border: 1px solid #e8e8e8; display: flex; align-items: center; justify-content: center; gap: 6px;
+}
 .phase-display #phase-text { font-size: 14px; font-weight: 600; color: #1890ff; }
+.phase-exit-btn {
+  font-size: 10px; color: #ccc; background: none; border: 1px solid #e8e8e8;
+  border-radius: 3px; padding: 1px 6px; cursor: pointer; line-height: 1.4;
+}
+.phase-exit-btn:hover { color: #ff4d4f; border-color: #ff4d4f; }
 .timer-display { text-align: center; padding: 2px 0; }
 .timer-display #timer-text {
   font-size: 32px; font-weight: bold; font-family: 'Courier New', monospace;
