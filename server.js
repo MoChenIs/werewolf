@@ -38,10 +38,12 @@ io.on('connection', (socket) => {
       return socket.emit('error', { code: 'JOIN_FAILED', message: result.error });
     }
     socket.join(roomId);
+    // 给新玩家发房间信息
     socket.emit('room_joined', roomManager.getRoomInfo(result.room));
     socket.emit('your_info', { seat: result.player.seat, playerId: socket.id });
-    // 通知房间其他人
-    socket.to(roomId).emit('player_joined', { seat: result.player.seat, name: result.player.name });
+    // 通知房间其他人（带完整玩家列表，更新 UI）
+    io.to(roomId).emit('room_joined', roomManager.getRoomInfo(result.room));
+    io.to(roomId).emit('player_joined', { seat: result.player.seat, name: result.player.name, isAi: false });
   });
 
   // 房主添加 AI

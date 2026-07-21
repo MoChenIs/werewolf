@@ -107,7 +107,7 @@ socket.on('your_info', (info) => {
 });
 
 socket.on('player_joined', (data) => {
-  addMessage('system', `新成员加入：${data.name}（${data.seat}号）${data.isAi ? '🤖 ' : ''}`);
+  addMessage('system', `用户${data.name}已加入房间`);
 });
 
 socket.on('player_left', (data) => {
