@@ -375,20 +375,23 @@ io.on('connection', (socket) => {
  const room = roomManager.findRoomBySocket(socket.id);
  if (!room || room.status !== 'ended') return;
 
- if (!room.playAgainVotes) room.playAgainVotes = new Set();
- room.playAgainVotes.add(socket.id);
+ const player = room.players.get(socket.id);
+ if (!player) return;
+
+ if (!room.playAgainVotes) room.playAgainVotes = [];
+ if (!room.playAgainVotes.find(v => v.id === socket.id)) {
+ room.playAgainVotes.push({ id: socket.id, name: player.name });
+ }
 
  // 人类成员总数（AI 自动同意）
  const totalHumans = Array.from(room.players.values()).filter(p => !p.isAi).length;
- const votedCount = room.playAgainVotes.size;
+ const votedCount = room.playAgainVotes.length;
 
  // 全 AI 局直接重开
  if (totalHumans === 0) return restartGame(room);
 
  // 获取已确认的成员姓名
- const voterNames = Array.from(room.playAgainVotes)
- .map(id => { const p = room.players.get(id); return p ? p.name : null; })
- .filter(Boolean);
+ const voterNames = room.playAgainVotes.map(v => v.name);
 
  io.to(room.id).emit('play_again_count', {
  count: votedCount,
@@ -1043,7 +1046,7 @@ function checkAndHandleGameEnd(room, io) {
 // ========== 再来一局 ==========
 
 function restartGame(room) {
- room.playAgainVotes = null;
+ room.playAgainVotes = [];
  room.players.forEach(p => {
  p.isAlive = true;
  p.role = null;
