@@ -667,8 +667,9 @@ let _bossMode = false;
 
 function toggleBossMode() {
  _bossMode = !_bossMode;
- const overlay = document.getElementById('boss-overlay');
- overlay.classList.toggle('hidden', !_bossMode);
+ // 左侧：隐藏游戏内容，显示工作文档
+ document.querySelector('.game-layout').classList.toggle('hidden', _bossMode);
+ document.getElementById('boss-doc').classList.toggle('hidden', !_bossMode);
  socket.emit('boss_mode', { active: _bossMode });
 }
 
