@@ -51,7 +51,7 @@ io.on('connection', (socket) => {
  const room = roomManager.findRoomBySocket(socket.id);
  if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '你不在项目组中' });
  if (room.host !== socket.id) return socket.emit('error', { code: 'NOT_HOST', message: '只有管理员可以添加AI' });
- if (room.status !== 'waiting') return socket.emit('error', { code: 'GAME_STARTED', message: '会议已开始' });
+ if (room.status !== 'waiting' && room.status !== 'ended') return socket.emit('error', { code: 'GAME_STARTED', message: '会议进行中，无法添加成员' });
  if (room.players.size >= room.config.maxPlayers) return socket.emit('error', { code: 'ROOM_FULL', message: '项目组已满' });
 
  const result = roomManager.addAiPlayer(room.id);

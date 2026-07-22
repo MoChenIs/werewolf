@@ -320,9 +320,9 @@ socket.on('witch_info', (data) => {
  const infoEl = document.getElementById('witch-info');
  if (!infoEl) return;
  if (data.tonightKilled) {
- infoEl.innerHTML = `被处理的是 <strong>${data.tonightKilled.seat}号 ${data.tonightKilled.name}</strong>`;
+ infoEl.innerHTML = `今晚被杀的是 <strong>${data.tonightKilled.seat}号 ${data.tonightKilled.name}</strong>`;
  } else {
- infoEl.innerHTML = '今晚无人被处理';
+ infoEl.innerHTML = '今晚无人被杀';
  }
  if (document.getElementById('witch-use-save')) {
  document.getElementById('witch-use-save').disabled = !data.hasSave;
