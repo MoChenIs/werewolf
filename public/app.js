@@ -27,6 +27,7 @@ const playerCountDisplay = document.getElementById('player-count-display');
 const playerListEl = document.getElementById('player-list');
 const startGameBtn = document.getElementById('start-game-btn');
 const addAiBtn = document.getElementById('add-ai-btn');
+const testModeBtn = document.getElementById('test-mode-btn');
 const leaveRoomBtn = document.getElementById('leave-room-btn');
 
 let currentPlayerId = null;
@@ -77,6 +78,10 @@ addAiBtn.addEventListener('click', () => {
  socket.emit('add_ai');
 });
 
+testModeBtn.addEventListener('click', () => {
+ socket.emit('toggle_test_mode');
+});
+
 leaveRoomBtn.addEventListener('click', () => {
  socket.emit('leave_room');
 });
@@ -100,6 +105,7 @@ socket.on('room_joined', (info) => {
  const isHost = socket.id === info.host;
  startGameBtn.classList.toggle('hidden', !isHost);
  addAiBtn.classList.toggle('hidden', !isHost);
+ testModeBtn.classList.toggle('hidden', !isHost);
 });
 
 socket.on('your_info', (info) => {
@@ -117,11 +123,49 @@ socket.on('player_left', (data) => {
  addMessage('system', `用户${data.name}退出了房间`);
 });
 
+// 角色选择（测试模式）
+socket.on('role_selection', (data) => {
+ const roles = { werewolf:'狼人', seer:'预言家', witch:'女巫', hunter:'猎人', villager:'平民' };
+ showPage('game-page');
+ const panel = document.getElementById('action-panel');
+ document.getElementById('phase-text').textContent = '选择角色';
+ panel.innerHTML = `
+ <div class="night-area" style="text-align:center;">
+ <div class="night-title">请选择你的角色</div>
+ <div class="vote-targets" style="margin-top:12px;">
+ ${data.pool.map(r => `
+ <button class="vote-target" onclick="pickRole('${r}')" id="role-${r}">
+ ${roles[r] || r}
+ </button>
+ `).join('')}
+ </div>
+ <div id="role-pick-status" style="margin-top:8px;font-size:12px;color:var(--text-secondary);"></div>
+ </div>
+ `;
+ document.getElementById('feed-messages').innerHTML = '';
+});
+socket.on('role_selected', (data) => {
+ const el = document.getElementById('role-pick-status');
+ if (el) el.textContent += `\n${data.seat}号已选择`;
+});
+function pickRole(role) {
+ socket.emit('select_role', { role });
+ document.querySelectorAll('[id^="role-"]').forEach(b => b.disabled = true);
+ document.getElementById('role-pick-status').textContent = '已选择，等待其他成员...';
+}
+
+socket.on('test_mode_changed', (data) => {
+ testModeBtn.textContent = data.enabled ? '正常模式' : '测试模式';
+ testModeBtn.style.borderColor = data.enabled ? 'var(--primary)' : 'var(--border)';
+ testModeBtn.style.color = data.enabled ? 'var(--primary)' : 'var(--text-secondary)';
+});
+
 socket.on('host_changed', (data) => {
  currentHostId = data.newHost;
  const isHost = socket.id === data.newHost;
  startGameBtn.classList.toggle('hidden', !isHost);
  addAiBtn.classList.toggle('hidden', !isHost);
+ testModeBtn.classList.toggle('hidden', !isHost);
 });
 
 socket.on('left_room', () => {

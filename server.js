@@ -71,6 +71,35 @@ io.on('connection', (socket) => {
  io.to(room.id).emit('player_boss_mode', { seat: player.seat, active: !!active });
  });
 
+ // 测试模式切换
+ socket.on('toggle_test_mode', () => {
+ const room = roomManager.findRoomBySocket(socket.id);
+ if (!room || room.host !== socket.id || room.status !== 'waiting') return;
+ room.testMode = !room.testMode;
+ io.to(room.id).emit('test_mode_changed', { enabled: room.testMode });
+ });
+
+ // 自选角色（测试模式用）
+ socket.on('select_role', ({ role }) => {
+ const room = roomManager.findRoomBySocket(socket.id);
+ if (!room || !room.testMode || room.status !== 'waiting') return;
+ const player = room.players.get(socket.id);
+ if (!player) return;
+ if (!room.selectedRoles) room.selectedRoles = {};
+ // 检查该角色是否已被选
+ const alreadyTaken = Object.values(room.selectedRoles).includes(role);
+ if (alreadyTaken) return socket.emit('error', { message: '该角色已被选择' });
+ room.selectedRoles[socket.id] = role;
+ player.testRole = role;
+ io.to(room.id).emit('role_selected', { seat: player.seat, role });
+
+ // 检查是否所有人已选完
+ const allSelected = Array.from(room.players.values()).every(p => room.selectedRoles[p.id]);
+ if (allSelected) {
+ startGameWithRoles(room, io);
+ }
+ });
+
  // 成员离开
  socket.on('leave_room', () => {
  const room = roomManager.findRoomBySocket(socket.id);
@@ -114,6 +143,15 @@ io.on('connection', (socket) => {
  if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '你不在项目组中' });
  if (room.host !== socket.id) return socket.emit('error', { code: 'NOT_HOST', message: '只有管理员可以开始会议' });
  if (room.players.size < 4) return socket.emit('error', { code: 'NOT_ENOUGH', message: '至少需要4名成员' });
+
+ if (room.testMode) {
+ // 测试模式：先进行角色选择
+ room.selectedRoles = {};
+ room.pendingRoleSeats = new Set(Array.from(room.players.values()).map(p => p.seat));
+ const rolePool = getRolePool(room.players.size);
+ io.to(room.id).emit('role_selection', { pool: rolePool, seats: Array.from(room.pendingRoleSeats) });
+ return;
+ }
 
  const engine = new GameEngine(room);
  room.game = engine;
@@ -1009,6 +1047,30 @@ function handleNightPhase(room, io, result) {
  }
  }
  }, engine.nightDuration);
+}
+
+// ========== 测试模式辅助函数 ==========
+
+function getRolePool(count) {
+ const defaultRoles = ['werewolf','werewolf','werewolf','seer','witch','hunter','villager','villager','villager'];
+ return defaultRoles.slice(0, count);
+}
+
+function startGameWithRoles(room, io) {
+ const engine = new GameEngine(room);
+ room.game = engine;
+ room.status = 'playing';
+ Array.from(room.players.values()).forEach(p => { p.role = room.selectedRoles[p.id] || null; });
+ engine.phase = 'role_assign';
+ room.players.forEach((player) => { io.to(player.id).emit('game_started', { role: player.role }); });
+ io.to(room.id).emit('phase_change', { phase: 'night_werewolf', message: ' 狼人行动中' });
+ const werewolves = engine.getWerewolves().filter(w => w.isAlive);
+ const werewolfSeats = werewolves.map(w => ({ seat: w.seat, name: w.name }));
+ werewolves.forEach(w => { io.to(w.id).emit('night_teammates', { teammates: werewolfSeats.filter(t => t.seat !== w.seat) }); });
+ const targets = Array.from(room.players.values()).filter(p => p.isAlive).map(p => ({ seat: p.seat, name: p.name }));
+ engine.werewolfVotes = {};
+ werewolves.forEach(w => { io.to(w.id).emit('your_turn', { seat: w.seat, action: 'night_kill', isYou: true, targets }); });
+ autoProcessAiNight(room, io);
 }
 
 // ========== 会议结束检查（通用） ==========
