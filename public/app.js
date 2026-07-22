@@ -43,6 +43,10 @@ let _tiedSeats = [];
 let _selectedWolfTarget = null;
 let _witchSelected = null;
 let _witchTarget = null;
+let _witchInfo = null;
+let _roleTeammates = [];
+let _investigatedList = [];
+let _currentRound = 0;
 
 // 页面切换
 function showPage(pageId) {
@@ -196,12 +200,29 @@ socket.on('game_started', ({ role }) => {
  addMessage('system', `会议开始！你的身份：${getRoleName(role)}`);
  // 缓存自己的角色到 sessionStorage
  sessionStorage.setItem('werewolf_role', role);
+ // 重置角色追踪数据
+ _roleTeammates = [];
+ _investigatedList = [];
+ updateRoleStatusBar();
 });
 
 // 阶段切换
 socket.on('phase_change', (data) => {
  currentPhase = data.phase;
  document.getElementById('phase-text').textContent = getPhaseText(data.phase);
+ // 轮数更新
+ if (data.round || data.phase === 'night_werewolf') {
+ if (data.round) _currentRound = data.round;
+ const rEl = document.getElementById('round-text');
+ if (rEl) {
+ if (_currentRound > 0) {
+ rEl.textContent = '当前游戏轮数：第' + _currentRound + '轮';
+ rEl.classList.remove('hidden');
+ } else {
+ rEl.classList.add('hidden');
+ }
+ }
+ }
  if (data.deaths) {
  // 死亡信息统一由 data.message 展示
  }
@@ -210,6 +231,7 @@ socket.on('phase_change', (data) => {
  }
  if (data.players) {
  _cachedPlayers = data.players.map(p => ({ ...p }));
+ updateRoleStatusBar();
  }
  // 同票重投阶段记录候选人
  if (data.phase === 'tie_vote' && data.tiedSeats) {
@@ -336,6 +358,8 @@ function playAgain() {
 
 // 夜间队友信息
 socket.on('night_teammates', (data) => {
+ _roleTeammates = data.teammates || [];
+ updateRoleStatusBar();
  if (data.teammates && data.teammates.length > 0) {
  addMessage('private', ` 狼队友：${data.teammates.map(t => `${t.seat}号 ${t.name}`).join(' ')}`);
  } else {
@@ -368,8 +392,18 @@ socket.on('night_result', (data) => {
  addMessage('private', ` ${data.message}`);
 });
 
+// 预言家查验结果（专用事件）
+socket.on('seer_result', (data) => {
+ if (data.target && !_investigatedList.some(i => i.seat === data.target.seat)) {
+ _investigatedList.push({ seat: data.target.seat, name: data.target.name, isWolf: data.isWerewolf });
+ }
+ updateRoleStatusBar();
+});
+
 // 女巫信息
 socket.on('witch_info', (data) => {
+ _witchInfo = data;
+ updateRoleStatusBar();
  const infoEl = document.getElementById('witch-info');
  if (!infoEl) return;
  if (data.tonightKilled) {
@@ -377,12 +411,11 @@ socket.on('witch_info', (data) => {
  } else {
  infoEl.innerHTML = '今晚无人被杀';
  }
- if (document.getElementById('witch-use-save')) {
- document.getElementById('witch-use-save').disabled = !data.hasSave;
- }
- if (document.getElementById('witch-use-kill')) {
- document.getElementById('witch-use-kill').disabled = !data.hasKill;
- }
+ // 根据使用记录禁用按钮
+ const saveBtn = document.getElementById('witch-btn-save');
+ const killBtn = document.getElementById('witch-btn-kill');
+ if (saveBtn) saveBtn.disabled = !data.hasSave;
+ if (killBtn) killBtn.disabled = !data.hasKill;
 });
 
 // 安全组被动：死亡后选择带走目标
@@ -459,7 +492,8 @@ function addMessage(type, content, extra = '') {
  if (type === 'speech') {
  div.innerHTML = `<span class="speaker">${extra}</span>${content}`;
  } else {
- div.textContent = content;
+ // system/private/result 允许 HTML（如 <strong>）
+ div.innerHTML = content;
  }
  feed.appendChild(div);
  feed.scrollTop = feed.scrollHeight;
@@ -567,10 +601,10 @@ function updateActionPanel(phase) {
  ${t.seat}号 ${t.name}
  </button>
  `).join('')}
- ${phase === 'tie_vote' ? `<button class="vote-target" data-seat="0"
+ <button class="vote-target" data-seat="0"
  onclick="castVote(0)" style="color:#888;">
  弃权
- </button>` : ''}
+ </button>
  </div>
  </div>
  `;
@@ -636,13 +670,16 @@ function renderNightAction(phase, panel) {
  break;
 
  case 'night_witch':
+ const saveDisabled = _witchInfo && !_witchInfo.hasSave;
+ const killDisabled = _witchInfo && !_witchInfo.hasKill;
  panel.innerHTML = `
  <div class="night-area">
  <div class="night-title"> 处置操作</div>
  <div id="witch-info" class="witch-info">加载中...</div>
  <div class="vote-targets" style="margin-top:8px;">
- <button class="vote-target ${_witchSelected === 'save' ? 'selected' : ''}" onclick="selectWitchAction('save')" id="witch-btn-save">使用解药</button>
- <button class="vote-target ${_witchSelected === 'kill' ? 'selected' : ''}" onclick="selectWitchAction('kill')" id="witch-btn-kill">使用毒药</button>
+ <button class="vote-target ${_witchSelected === 'save' ? 'selected' : ''}" onclick="selectWitchAction('save')" id="witch-btn-save" ${saveDisabled ? 'disabled' : ''}>使用解药</button>
+ <button class="vote-target ${_witchSelected === 'kill' ? 'selected' : ''}" onclick="selectWitchAction('kill')" id="witch-btn-kill" ${killDisabled ? 'disabled' : ''}>使用毒药</button>
+ <button class="vote-target ${_witchSelected === 'pass' ? 'selected' : ''}" onclick="selectWitchAction('pass')" id="witch-btn-pass">弃权</button>
  </div>
  <div id="witch-kill-target-wrapper" class="hidden" style="margin-top:8px;">
  <p class="skill-name" style="margin-bottom:4px;">选择目标成员</p>
@@ -665,6 +702,47 @@ function renderNightAction(phase, panel) {
 function isCurrentPlayerAlive() {
  const p = _cachedPlayers.find(p => p.seat === currentSeat);
  return p ? p.isAlive : false;
+}
+
+
+// ========== 角色专属状态栏 ==========
+function updateRoleStatusBar() {
+ const bar = document.getElementById('role-status-bar');
+ if (!bar) return;
+ const role = sessionStorage.getItem('werewolf_role');
+ if (!role || role === 'villager' || role === 'hunter') { bar.classList.add('hidden'); return; }
+
+ let html = '';
+
+ if (role === 'werewolf') {
+ html += '<span class="role-label">你的身份：</span><span class="role-badge role-werewolf">狼人</span>';
+ if (_roleTeammates.length > 0) {
+ html += '<span class="role-label" style="margin-left:12px;">你的队友：</span>';
+ _roleTeammates.forEach(t => {
+ const player = _cachedPlayers.find(p => p.seat === t.seat);
+ const isDead = player && !player.isAlive;
+ html += '<span class="role-badge' + (isDead ? ' dead' : '') + '">' + t.seat + '号 ' + t.name + '</span>';
+ });
+ }
+ } else if (role === 'seer') {
+ html += '<span class="role-label">你的身份：</span><span class="role-badge role-seer">预言家</span>';
+ html += '<span class="role-label" style="margin-left:12px;">已查验身份：</span>';
+ _investigatedList.forEach(item => {
+ html += '<span class="role-badge role-seer">' + item.seat + '号 ' + item.name + ' | ' + (item.isWolf ? '狼人' : '好人') + '</span>';
+ });
+ if (_investigatedList.length === 0) {
+ html += '<span class="role-badge" style="color:var(--text-muted);border-style:dashed;">等待查验...</span>';
+ }
+ } else if (role === 'witch') {
+ const hasSave = _witchInfo ? _witchInfo.hasSave : true;
+ const hasKill = _witchInfo ? _witchInfo.hasKill : true;
+ html += '<span class="role-label">你的身份：</span><span class="role-badge role-witch">女巫</span>';
+ html += '<span class="role-badge' + (!hasSave ? ' dead' : '') + '">解药 ' + (hasSave ? '✓' : '✗') + '</span>';
+ html += '<span class="role-badge' + (!hasKill ? ' dead' : '') + '">毒药 ' + (hasKill ? '✓' : '✗') + '</span>';
+ }
+
+ bar.innerHTML = html;
+ bar.classList.remove('hidden');
 }
 
 // ========== 阶段文本 ==========
@@ -716,7 +794,7 @@ let _bossMode = false;
 function toggleBossMode() {
  _bossMode = !_bossMode;
  // 左侧：隐藏游戏区域，显示工作文档
- const zones = document.querySelectorAll('.zone-status, .zone-feed, .zone-action, .player-status-list');
+ const zones = document.querySelectorAll('.zone-status, .zone-feed, .zone-action, .player-status-list, #role-status-bar');
  zones.forEach(el => el.classList.toggle('hidden', _bossMode));
  document.getElementById('boss-doc').classList.toggle('hidden', !_bossMode);
  socket.emit('boss_mode', { active: _bossMode });
@@ -794,8 +872,10 @@ function submitWitchAction() {
  } else if (_witchSelected === 'kill') {
  if (!_witchTarget) { showError('请选择目标成员'); return; }
  socket.emit('night_action', { action: 'witch', save: false, killTarget: _witchTarget });
+ } else if (_witchSelected === 'pass') {
+ socket.emit('night_action', { action: 'witch', save: false, killTarget: null });
  } else {
- showError('请选择使用解药或毒药');
+ showError('请选择使用解药、毒药或弃权');
  }
 }
 
