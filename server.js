@@ -94,8 +94,17 @@ io.on('connection', (socket) => {
  io.to(room.id).emit('role_selected', { seat: player.seat, role });
 
  // 检查是否所有人已选完
- const allSelected = Array.from(room.players.values()).every(p => room.selectedRoles[p.id]);
- if (allSelected) {
+ const allHumanSelected = Array.from(room.players.values()).filter(p => !p.isAi).every(p => room.selectedRoles[p.id]);
+ if (allHumanSelected) {
+ // 人类选完后，AI 从剩余角色中随机分配
+ const pool = getRolePool(room.players.size);
+ Array.from(room.players.values()).filter(p => p.isAi).forEach(ai => {
+ const remaining = pool.filter(r => !Object.values(room.selectedRoles).includes(r));
+ if (remaining.length > 0) {
+ const pick = remaining[Math.floor(Math.random() * remaining.length)];
+ room.selectedRoles[ai.id] = pick;
+ }
+ });
  startGameWithRoles(room, io);
  }
  });
@@ -148,15 +157,8 @@ io.on('connection', (socket) => {
  // 测试模式：先进行角色选择
  room.selectedRoles = {};
  const rolePool = getRolePool(room.players.size);
- // AI 自动从剩余角色池中随机分配
- Array.from(room.players.values()).filter(p => p.isAi).forEach(ai => {
- const shuffled = [...rolePool].sort(() => Math.random() - 0.5);
- const picked = shuffled.find(r => !Object.values(room.selectedRoles).includes(r));
- if (picked) room.selectedRoles[ai.id] = picked;
- });
  const humanSeats = Array.from(room.players.values()).filter(p => !p.isAi).map(p => p.seat);
- const remainingRoles = rolePool.filter(r => !Object.values(room.selectedRoles).includes(r));
- io.to(room.id).emit('role_selection', { pool: remainingRoles, seats: humanSeats });
+ io.to(room.id).emit('role_selection', { pool: rolePool, seats: humanSeats, isHuman: true });
  return;
  }
 

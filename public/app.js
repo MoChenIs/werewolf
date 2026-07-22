@@ -145,12 +145,16 @@ socket.on('role_selection', (data) => {
  document.getElementById('feed-messages').innerHTML = '';
 });
 socket.on('role_selected', (data) => {
+ const roles = { werewolf:'狼人', seer:'预言家', witch:'女巫', hunter:'猎人', villager:'平民' };
+ const btn = document.getElementById('role-' + data.role);
+ if (btn) { btn.classList.add('selected'); btn.disabled = true; }
  const el = document.getElementById('role-pick-status');
- if (el) el.textContent += `\n${data.seat}号已选择`;
+ if (el) el.textContent = `${data.seat}号选择了${roles[data.role] || data.role}`;
 });
 function pickRole(role) {
  socket.emit('select_role', { role });
- document.querySelectorAll('[id^="role-"]').forEach(b => b.disabled = true);
+ const btn = document.getElementById('role-' + role);
+ if (btn) { btn.classList.add('selected'); btn.disabled = true; }
  document.getElementById('role-pick-status').textContent = '已选择，等待其他成员...';
 }
 
