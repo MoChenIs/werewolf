@@ -94,7 +94,9 @@ io.on('connection', (socket) => {
  io.to(room.id).emit('role_selected', { seat: player.seat, role });
 
  // 检查是否所有人已选完
- const allHumanSelected = Array.from(room.players.values()).filter(p => !p.isAi).every(p => room.selectedRoles[p.id]);
+ const humans = Array.from(room.players.values()).filter(p => !p.isAi);
+ const allHumanSelected = humans.every(p => room.selectedRoles[p.id]);
+ console.log(`[测试模式] 角色选择: ${humans.length}人, 已选${Object.keys(room.selectedRoles).length}, 全部完成=${allHumanSelected}`);
  if (allHumanSelected) {
  // 人类选完后，AI 从剩余角色中随机分配
  const pool = getRolePool(room.players.size);
@@ -1070,7 +1072,9 @@ function startGameWithRoles(room, io) {
  room.game = engine;
  room.status = 'playing';
  Array.from(room.players.values()).forEach(p => { p.role = room.selectedRoles[p.id] || null; });
- engine.phase = 'role_assign';
+ // 正确初始化引擎阶段
+ engine.round = 1;
+ engine.phase = 'night_werewolf';
  room.players.forEach((player) => { io.to(player.id).emit('game_started', { role: player.role }); });
  io.to(room.id).emit('phase_change', { phase: 'night_werewolf', message: ' 狼人行动中' });
  const werewolves = engine.getWerewolves().filter(w => w.isAlive);
