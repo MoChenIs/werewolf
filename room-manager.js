@@ -83,7 +83,7 @@ class RoomManager {
   addAiPlayer(roomId) {
     const room = this.rooms.get(roomId);
     if (!room) return { error: '房间不存在' };
-    if (room.status !== 'waiting') return { error: '游戏已开始，无法添加AI' };
+    if (room.status !== 'waiting' && room.status !== 'ended') return { error: '游戏进行中，无法添加AI' };
     if (room.players.size >= room.config.maxPlayers) return { error: '房间已满' };
 
     const seat = room.seatCount + 1;

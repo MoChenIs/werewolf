@@ -668,7 +668,7 @@ let _bossMode = false;
 function toggleBossMode() {
  _bossMode = !_bossMode;
  // 左侧：隐藏游戏区域，显示工作文档
- const zones = document.querySelectorAll('.zone-feed, .zone-action, .player-status-list');
+ const zones = document.querySelectorAll('.zone-status, .zone-feed, .zone-action, .player-status-list');
  zones.forEach(el => el.classList.toggle('hidden', _bossMode));
  document.getElementById('boss-doc').classList.toggle('hidden', !_bossMode);
  socket.emit('boss_mode', { active: _bossMode });
