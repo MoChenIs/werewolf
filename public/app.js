@@ -40,6 +40,8 @@ let _currentSpeakerSeat = null;
 let _myNightPhase = null;
 let _tiedSeats = [];
 let _selectedWolfTarget = null;
+let _witchSelected = null;
+let _witchTarget = null;
 
 // 页面切换
 function showPage(pageId) {
@@ -585,33 +587,23 @@ function renderNightAction(phase, panel) {
  <div class="night-area">
  <div class="night-title"> 处置操作</div>
  <div id="witch-info" class="witch-info">加载中...</div>
- <div class="witch-actions" style="margin-top:12px;">
- <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
- <input type="checkbox" id="witch-use-save"> 保留
- </label>
- <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
- <input type="checkbox" id="witch-use-kill"> 移除
- </label>
- <div id="witch-kill-target-wrapper" class="hidden" style="margin-bottom:8px;">
- <p class="skill-name">选择目标成员</p>
- <select id="night-target">
- ${targets.map(t => `<option value="${t.seat}">${t.seat}号 ${t.name}</option>`).join('')}
- </select>
+ <div class="vote-targets" style="margin-top:8px;">
+ <button class="vote-target ${_witchSelected === 'save' ? 'selected' : ''}" onclick="selectWitchAction('save')" id="witch-btn-save">使用解药</button>
+ <button class="vote-target ${_witchSelected === 'kill' ? 'selected' : ''}" onclick="selectWitchAction('kill')" id="witch-btn-kill">使用毒药</button>
+ </div>
+ <div id="witch-kill-target-wrapper" class="hidden" style="margin-top:8px;">
+ <p class="skill-name" style="margin-bottom:4px;">选择目标成员</p>
+ <div class="vote-targets">
+ ${targets.map(t => `
+ <button class="vote-target" onclick="selectWitchTarget(${t.seat})" id="witch-target-${t.seat}">
+ ${t.seat}号 ${t.name}
+ </button>
+ `).join('')}
  </div>
  </div>
- <button class="btn-confirm" onclick="submitWitchAction()">确认</button>
+ <button class="btn-confirm" onclick="submitWitchAction()" style="margin-top:8px;">确认</button>
  </div>
  `;
- // 毒药复选框切换显示目标选择
- setTimeout(() => {
- const killCheck = document.getElementById('witch-use-kill');
- if (killCheck) {
- killCheck.addEventListener('change', function() {
- document.getElementById('witch-kill-target-wrapper')
- .classList.toggle('hidden', !this.checked);
- });
- }
- }, 100);
  break;
 
  }
@@ -727,11 +719,31 @@ function submitNightAction(type) {
  socket.emit('night_action', { target, action: type });
 }
 
+function selectWitchAction(type) {
+ _witchSelected = type;
+ document.querySelectorAll('[id^="witch-btn-"]').forEach(b => b.classList.remove('selected'));
+ const btn = document.getElementById('witch-btn-' + type);
+ if (btn) btn.classList.add('selected');
+ document.getElementById('witch-kill-target-wrapper').classList.toggle('hidden', type !== 'kill');
+ _witchTarget = null;
+}
+
+function selectWitchTarget(seat) {
+ _witchTarget = seat;
+ document.querySelectorAll('[id^="witch-target-"]').forEach(b => b.classList.remove('selected'));
+ const btn = document.getElementById('witch-target-' + seat);
+ if (btn) btn.classList.add('selected');
+}
+
 function submitWitchAction() {
- const useSave = document.getElementById('witch-use-save').checked;
- const useKill = document.getElementById('witch-use-kill').checked;
- const killTarget = useKill ? parseInt(document.getElementById('night-target').value) : null;
- socket.emit('night_action', { action: 'witch', save: useSave, killTarget });
+ if (_witchSelected === 'save') {
+ socket.emit('night_action', { action: 'witch', save: true, killTarget: null });
+ } else if (_witchSelected === 'kill') {
+ if (!_witchTarget) { showError('请选择目标成员'); return; }
+ socket.emit('night_action', { action: 'witch', save: false, killTarget: _witchTarget });
+ } else {
+ showError('请选择使用解药或毒药');
+ }
 }
 
 // ========== 房间事件中缓存玩家列表 ==========
