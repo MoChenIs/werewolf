@@ -147,9 +147,16 @@ io.on('connection', (socket) => {
  if (room.testMode) {
  // 测试模式：先进行角色选择
  room.selectedRoles = {};
- room.pendingRoleSeats = new Set(Array.from(room.players.values()).map(p => p.seat));
  const rolePool = getRolePool(room.players.size);
- io.to(room.id).emit('role_selection', { pool: rolePool, seats: Array.from(room.pendingRoleSeats) });
+ // AI 自动从剩余角色池中随机分配
+ Array.from(room.players.values()).filter(p => p.isAi).forEach(ai => {
+ const shuffled = [...rolePool].sort(() => Math.random() - 0.5);
+ const picked = shuffled.find(r => !Object.values(room.selectedRoles).includes(r));
+ if (picked) room.selectedRoles[ai.id] = picked;
+ });
+ const humanSeats = Array.from(room.players.values()).filter(p => !p.isAi).map(p => p.seat);
+ const remainingRoles = rolePool.filter(r => !Object.values(room.selectedRoles).includes(r));
+ io.to(room.id).emit('role_selection', { pool: remainingRoles, seats: humanSeats });
  return;
  }
 
