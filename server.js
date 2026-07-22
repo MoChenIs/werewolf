@@ -385,9 +385,15 @@ io.on('connection', (socket) => {
  // 全 AI 局直接重开
  if (totalHumans === 0) return restartGame(room);
 
+ // 获取已确认的成员姓名
+ const voterNames = Array.from(room.playAgainVotes)
+ .map(id => { const p = room.players.get(id); return p ? p.name : null; })
+ .filter(Boolean);
+
  io.to(room.id).emit('play_again_count', {
  count: votedCount,
- total: totalHumans
+ total: totalHumans,
+ voters: voterNames
  });
 
  // 所有人类成员都同意 = 重开

@@ -272,7 +272,10 @@ socket.on('game_over', (data) => {
 // 重新开始计数
 socket.on('play_again_count', (data) => {
  const el = document.getElementById('play-again-status');
- if (el) el.textContent = `等待其他成员确认 (${data.count}/${data.total})`;
+ if (!el) return;
+ const voters = data.voters || [];
+ const names = voters.length ? `用户${voters.join('、')}已确认（${data.count}/${data.total}）` : `等待其他成员确认 (${data.count}/${data.total})`;
+ el.textContent = names;
 });
 
 function playAgain() {
