@@ -627,15 +627,6 @@ function filterSensitiveWords(content) {
  return filtered;
 }
 
-// 天亮后自动开始讨论（无需管理员点击）
-function autoStartSpeech(room, io) {
- const engine = room.game;
- if (!engine || engine.phase !== 'dawn_death_announce') return;
- const result = engine.startFreeSpeech();
- io.to(room.id).emit('phase_change', { phase: 'free_speech', message: '讨论开始' });
- startSpeechTimerForSpeaker(room, io);
-}
-
 function startSpeechTimerForSpeaker(room, io) {
  const engine = room.game;
  const speakerSeat = engine.dayOrder[engine.currentSpeaker];

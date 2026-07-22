@@ -26,6 +26,8 @@ class GameEngine {
  this.witchUsedSave = false;
  this.witchUsedKill = false;
  this.hunterUsedAbility = false; // 猎人是否已使用被动技能
+ this.tieVoteRound = 0; // 平票重投轮次
+ this.tieVotePrevSeats = null; // 上一轮平票的座位
  }
 
  // 分配角色
