@@ -458,16 +458,21 @@ function updateActionPanel(phase) {
  panel.innerHTML = `
  <div class="speech-area">
  <div class="speech-label"> 发表意见</div>
+ <div class="speech-row">
  <textarea id="speech-input" placeholder="输入意见内容..." maxlength="200"></textarea>
- <div class="speech-actions">
+ <div class="speech-side">
  <button class="btn btn-send" onclick="sendSpeech()">发送</button>
  <button class="btn btn-end" onclick="exitGame()">退出房间</button>
+ </div>
  </div>
  </div>
  `;
  setTimeout(() => {
  const el = document.getElementById('speech-input');
- if (el) el.focus();
+ if (el) { el.focus();
+ el.addEventListener('keydown', function(e) {
+ if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendSpeech(); }
+ }); }
  }, 100);
  } else {
  panel.innerHTML = `<p class="waiting-text"> 等待 ${_currentSpeakerSeat || '?'}号玩家发言中...</p>`;

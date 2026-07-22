@@ -185,15 +185,16 @@ body {
 /* 发言 */
 .speech-area { display: flex; flex-direction: column; gap: 6px; }
 .speech-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
-.speech-area textarea {
-  padding: 8px 10px; border: 1px solid var(--border-input); border-radius: var(--radius-sm);
+.speech-row { display: flex; gap: 6px; flex: 1; min-height: 0; }
+.speech-row textarea {
+  flex: 1; padding: 8px 10px; border: 1px solid var(--border-input); border-radius: var(--radius-sm);
   background: var(--card); color: var(--text); font-size: 13px; resize: none; outline: none;
-  min-height: 54px; transition: border-color 0.2s;
+  transition: border-color 0.2s;
 }
-.speech-area textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(217,119,6,0.08); }
-.speech-actions { display: flex; gap: 6px; }
-.speech-actions .btn-send { flex: 1; background: var(--primary); color: #fff; padding: 6px; border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; }
-.speech-actions .btn-end { background: var(--bg); color: var(--text-secondary); padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; }
+.speech-row textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(217,119,6,0.08); }
+.speech-side { display: flex; flex-direction: column; gap: 4px; width: 72px; flex-shrink: 0; }
+.speech-side .btn-send { flex: 1; background: var(--primary); color: #fff; padding: 6px; border: none; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; }
+.speech-side .btn-end { background: var(--bg); color: var(--text-secondary); padding: 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; }
 
 /* 投票 */
 .vote-area { display: flex; flex-direction: column; gap: 6px; }
