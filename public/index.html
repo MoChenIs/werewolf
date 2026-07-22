@@ -61,6 +61,7 @@
             <span class="timer-display">(<span id="timer-text">--</span>s)</span>
           </div>
           <button class="phase-exit-btn" onclick="exitGame()">离开</button>
+          <button class="btn btn-sm boss-btn" onclick="toggleBossMode()" title="Alt+L">跑路了兄弟们</button>
         </div>
         <!-- 参与者标签 -->
         <div class="player-status-list" id="player-status-list"></div>
@@ -80,6 +81,11 @@
         <iframe src="right-panel.html" style="width:100%;height:100%;border:none;"></iframe>
       </div>
     </div>
+  </div>
+
+  <!-- 跑路模式覆盖层（全屏显示文档） -->
+  <div id="boss-overlay" class="boss-overlay hidden">
+    <iframe src="right-panel.html" style="width:100%;height:100%;border:none;"></iframe>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

@@ -435,6 +435,7 @@ function updatePlayerStatusList() {
  ${isCurrent ? '<span>(你)</span>' : ''}
  ${p.disconnected ? '<span style="color:#888;font-size:11px;">[断线]</span>' : ''}
  ${p.isAi ? '<span style="color:#888;font-size:11px;">[AI]</span>' : ''}
+ ${p.bossMode ? '<span style="color:#92400e;font-size:11px;">[跑路]</span>' : ''}
  </div>
  `;
  }).join('');
@@ -661,6 +662,28 @@ function sendSpeech() {
 function endSpeech() {
  socket.emit('end_speech');
 }
+
+let _bossMode = false;
+
+function toggleBossMode() {
+ _bossMode = !_bossMode;
+ const overlay = document.getElementById('boss-overlay');
+ overlay.classList.toggle('hidden', !_bossMode);
+ socket.emit('boss_mode', { active: _bossMode });
+}
+
+// 键盘快捷键 Alt+L 切换跑路模式
+document.addEventListener('keydown', function(e) {
+ if (e.altKey && e.key === 'l') { e.preventDefault(); toggleBossMode(); }
+ if (e.altKey && e.key === 'L') { e.preventDefault(); toggleBossMode(); }
+});
+
+// 接收其他成员的跑路状态
+socket.on('player_boss_mode', (data) => {
+ const p = _cachedPlayers.find(x => x.seat === data.seat);
+ if (p) p.bossMode = data.active;
+ updatePlayerStatusList();
+});
 
 function exitGame() {
  document.getElementById('modal-overlay').classList.remove('hidden');

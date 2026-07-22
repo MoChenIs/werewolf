@@ -32,7 +32,8 @@ class RoomManager {
       warnings: 0,
       hasVoted: false,
       voteTarget: null,
-      isAi: false
+      isAi: false,
+      bossMode: false
     };
     const room = {
       id: roomId,
@@ -71,7 +72,8 @@ class RoomManager {
       warnings: 0,
       hasVoted: false,
       voteTarget: null,
-      isAi: false
+      isAi: false,
+      bossMode: false
     };
     room.players.set(socketId, player);
     return { room, player };
@@ -99,7 +101,8 @@ class RoomManager {
       warnings: 0,
       hasVoted: false,
       voteTarget: null,
-      isAi: true
+      isAi: true,
+      bossMode: false
     };
     room.players.set(aiId, player);
     return { room, player };
@@ -147,7 +150,8 @@ class RoomManager {
       isAlive: p.isAlive,
       disconnected: p.disconnected,
       isHost: room.host === p.id,
-      isAi: p.isAi || false
+      isAi: p.isAi || false,
+      bossMode: p.bossMode || false
     }));
     players.sort((a, b) => a.seat - b.seat);
     return {

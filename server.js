@@ -61,6 +61,16 @@ io.on('connection', (socket) => {
  io.to(room.id).emit('room_joined', roomManager.getRoomInfo(room));
  });
 
+ // 跑路模式
+ socket.on('boss_mode', ({ active }) => {
+ const room = roomManager.findRoomBySocket(socket.id);
+ if (!room) return;
+ const player = room.players.get(socket.id);
+ if (!player) return;
+ player.bossMode = !!active;
+ io.to(room.id).emit('player_boss_mode', { seat: player.seat, active: !!active });
+ });
+
  // 成员离开
  socket.on('leave_room', () => {
  const room = roomManager.findRoomBySocket(socket.id);
