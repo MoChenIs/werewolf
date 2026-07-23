@@ -1,6 +1,6 @@
 {
   "name": "werewolf-text-game",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "纯文字线上狼人杀（90s打字版）",
   "main": "server.js",
   "scripts": {

@@ -9,6 +9,7 @@ const { processSeerAction, getSeerTargets } = require('./roles/seer');
 const { processWitchAction, getWitchInfo } = require('./roles/witch');
 const { processHunterAction, getHunterTargets } = require('./roles/hunter');
 const ai = require('./roles/ai');
+const gameLogger = require('./game-logger');
 
 const app = express();
 const server = http.createServer(app);
@@ -24,6 +25,24 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/version', (req, res) => {
   const pkg = require('./package.json');
   res.json({ version: pkg.version });
+});
+
+// 游戏日志 API
+app.get('/api/games', (req, res) => {
+  const games = gameLogger.getAllGames();
+  res.json(games);
+});
+
+app.get('/api/games/recent', (req, res) => {
+  const n = parseInt(req.query.n) || 10;
+  const summaries = gameLogger.getRecentSummaries(n);
+  res.json(summaries);
+});
+
+app.get('/api/games/:gameId', (req, res) => {
+  const game = gameLogger.getGame(req.params.gameId);
+  if (!game) return res.status(404).json({ error: '游戏不存在' });
+  res.json(game);
 });
 
 // Socket.io 连接
@@ -160,6 +179,7 @@ io.on('connection', (socket) => {
  const player = room.players.get(socket.id);
  if (player) {
  socket.leave(room.id);
+ gameLogger.endGame('none');
  room.players.forEach((p) => {
  const isGood = p.role !== 'werewolf';
  const playerWon = false;
@@ -210,6 +230,7 @@ io.on('connection', (socket) => {
 
  // 初始化 AI 仿真系统
  ai.initNewGame(room);
+ gameLogger.startGame(room);
 
  // 私密发送身份
  room.players.forEach((player) => {
@@ -288,6 +309,7 @@ io.on('connection', (socket) => {
  content: filtered
  });
  engine.addLog('speech', `${player.seat}号发言: ${filtered}`, player.seat);
+ gameLogger.logSpeech(player.seat, player.name, filtered);
  // 记录到所有 AI 的记忆中
  for (const [, p] of room.players) {
  if (p.isAi && p.isAlive) {
@@ -835,6 +857,7 @@ function handleVoteResult(room, io, result) {
  isTie: result.isTie || false,
  tiedSeats: result.tiedSeats || []
  });
+ gameLogger.logVote(result.rawVotes || {}, result.eliminated, result.isTie);
 
  if (result.phase === 'final_words') {
  // 查找被票离场的成员角色
@@ -894,6 +917,7 @@ function handleVoteResult(room, io, result) {
  seat: p.seat, name: p.name, role: p.role
  }));
 
+ gameLogger.endGame(next.winner);
  room.players.forEach((player) => {
  const isGood = player.role !== 'werewolf';
  const playerWon = (next.winner === 'good' && isGood) || (next.winner === 'werewolf' && !isGood);
@@ -965,6 +989,7 @@ function startTieSpeaker(room, io, speakerSeat) {
  content: speech
  });
  engine.addLog('speech', `${speaker.seat}号发言: ${speech}`, speaker.seat);
+ gameLogger.logSpeech(speaker.seat, speaker.name, speech);
  engine.markPlayerSpoke(speaker.seat);
  for (const [, p] of room.players) {
  if (p.isAi && p.isAlive) {
@@ -1023,6 +1048,7 @@ function handleAfterFinalWords(room, io, engine) {
  seat: p.seat, name: p.name, role: p.role
  }));
  
+ gameLogger.endGame(next.winner);
  room.players.forEach((player) => {
  const isGood = player.role !== 'werewolf';
  const playerWon = (next.winner === 'good' && isGood) || (next.winner === 'werewolf' && !isGood);
@@ -1071,6 +1097,7 @@ function handleNightPhase(room, io, result) {
  // 立即开始讨论
  const speechResult = engine.startFreeSpeech();
  const deaths = result.deaths || [];
+ if (deaths.length) gameLogger.logDeath(deaths);
  const deathMsg = deaths.length
  ? `<strong>天亮了</strong>，昨晚 ${deaths.map(d => `${d.seat}号成员死亡`).join(' ')}`
  : '<strong>天亮了</strong>，昨晚是平安夜';
@@ -1203,6 +1230,7 @@ function startGameWithRoles(room, io) {
  engine.phase = 'night_werewolf';
  // 初始化 AI 仿真系统
  ai.initNewGame(room);
+ gameLogger.startGame(room);
  room.players.forEach((player) => { io.to(player.id).emit('game_started', { role: player.role }); });
  io.to(room.id).emit('phase_change', { phase: 'night_werewolf', message: ' 狼人行动中', round: 1 });
  const werewolves = engine.getWerewolves().filter(w => w.isAlive);
@@ -1234,6 +1262,7 @@ function checkAndHandleGameEnd(room, io) {
  });
  });
  room.status = 'ended';
+ gameLogger.endGame(endCheck.winner);
  return true;
 }
 
