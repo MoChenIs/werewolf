@@ -24,6 +24,8 @@ const createRoomBtn = document.getElementById('create-room-btn');
 const lobbyError = document.getElementById('lobby-error');
 const roomIdDisplay = document.getElementById('room-id-display');
 const playerCountDisplay = document.getElementById('player-count-display');
+let currentPlayerCount = 0;
+let currentMaxPlayers = 0;
 const playerListEl = document.getElementById('player-list');
 const startGameBtn = document.getElementById('start-game-btn');
 const addAiBtn = document.getElementById('add-ai-btn');
@@ -78,8 +80,19 @@ startGameBtn.addEventListener('click', () => {
  socket.emit('start_game');
 });
 
-addAiBtn.addEventListener('click', () => {
+addAiBtn.addEventListener('click', (e) => {
+ if (e.ctrlKey || e.metaKey) {
+ // Ctrl+点击：一键补充所有空位
+ const remaining = currentMaxPlayers - currentPlayerCount;
+ if (remaining > 0) {
+ console.log(`[AI] 一键补充 ${remaining} 个空位`);
+ for (let i = 0; i < remaining; i++) {
  socket.emit('add_ai');
+ }
+ }
+ } else {
+ socket.emit('add_ai');
+ }
 });
 
 testModeBtn.addEventListener('click', () => {
@@ -481,6 +494,8 @@ function updatePlayerList(players) {
 }
 
 function updatePlayerCount(count, max) {
+ currentPlayerCount = count;
+ currentMaxPlayers = max;
  playerCountDisplay.textContent = `${count}/${max}`;
 }
 

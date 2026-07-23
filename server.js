@@ -68,6 +68,28 @@ io.on('connection', (socket) => {
  io.to(room.id).emit('room_joined', roomManager.getRoomInfo(room));
  });
 
+ // 管理员一键补充所有空位（Ctrl+点击）
+ socket.on('add_ai_fill', () => {
+ const room = roomManager.findRoomBySocket(socket.id);
+ if (!room) return socket.emit('error', { code: 'NO_ROOM', message: '你不在项目组中' });
+ if (room.host !== socket.id) return socket.emit('error', { code: 'NOT_HOST', message: '只有管理员可以添加AI' });
+ if (room.status !== 'waiting' && room.status !== 'ended') return socket.emit('error', { code: 'GAME_STARTED', message: '会议进行中，无法添加成员' });
+
+ const remaining = room.config.maxPlayers - room.players.size;
+ if (remaining <= 0) return socket.emit('error', { code: 'ROOM_FULL', message: '项目组已满' });
+
+ let added = 0;
+ for (let i = 0; i < remaining; i++) {
+ const result = roomManager.addAiPlayer(room.id);
+ if (result.error) break;
+ added++;
+ io.to(room.id).emit('player_joined', { seat: result.player.seat, name: result.player.name, isAi: true });
+ }
+
+ io.to(room.id).emit('room_joined', roomManager.getRoomInfo(room));
+ console.log(`[AI] 一键补充 ${added} 个AI成员`);
+ });
+
  // 跑路模式
  socket.on('boss_mode', ({ active }) => {
  const room = roomManager.findRoomBySocket(socket.id);
