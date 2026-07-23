@@ -23,6 +23,7 @@
     <div class="lobby-container">
       <h1 class="app-title">协作工作台</h1>
       <p class="app-subtitle">沟通 · 决策 · 反馈</p>
+      <p class="app-version" id="app-version">v1.0.0</p>
       <div class="lobby-actions">
         <div class="input-group">
           <input type="text" id="player-name" placeholder="输入姓名" maxlength="8">
@@ -59,11 +60,14 @@
         <div class="zone-status">
           <div class="phase-display">
             <span id="phase-text">等待开始</span>
+            <span id="round-text" class="round-text hidden"></span>
             <span class="timer-display">(<span id="timer-text">--</span>s)</span>
           </div>
           <button class="phase-exit-btn" onclick="exitGame()">离开</button>
           <button class="btn btn-sm boss-btn" onclick="toggleBossMode()" title="Alt+L">跑路了兄弟们</button>
         </div>
+        <!-- 角色专属状态栏（狼人/预言家/女巫） -->
+        <div id="role-status-bar" class="role-status-bar hidden"></div>
         <!-- 跑路模式文档（隐藏，取代游戏内容） -->
         <div id="boss-doc" class="boss-doc hidden">
           <iframe src="boss-doc.html" style="width:100%;height:100%;border:none;"></iframe>
@@ -91,5 +95,14 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="timer.js"></script>
   <script src="app.js"></script>
+  <script>
+    // 获取并显示版本号
+    fetch('/api/version')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('app-version').textContent = 'v' + data.version;
+      })
+      .catch(() => {});
+  </script>
 </body>
 </html>

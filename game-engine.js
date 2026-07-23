@@ -305,7 +305,12 @@ class GameEngine {
  }
  }
 
- // 检查挂机成员
+ // 获取日志（供 AI 模块使用）
+	 getLogs() {
+	 return this.history;
+	 }
+
+	 // 检查挂机成员
  checkAfk() {
  const alivePlayers = Array.from(this.room.players.values())
  .filter(p => p.isAlive);

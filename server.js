@@ -8,6 +8,7 @@ const { processWerewolfAction, getWerewolfTargets } = require('./roles/werewolf'
 const { processSeerAction, getSeerTargets } = require('./roles/seer');
 const { processWitchAction, getWitchInfo } = require('./roles/witch');
 const { processHunterAction, getHunterTargets } = require('./roles/hunter');
+const ai = require('./roles/ai');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,6 +19,12 @@ const PORT = process.env.PORT || 9919;
 
 // 静态文件服务
 app.use(express.static(path.join(__dirname, 'public')));
+
+// 版本号 API
+app.get('/api/version', (req, res) => {
+  const pkg = require('./package.json');
+  res.json({ version: pkg.version });
+});
 
 // Socket.io 连接
 io.on('connection', (socket) => {
@@ -179,6 +186,9 @@ io.on('connection', (socket) => {
  room.status = 'playing';
  engine.startGame();
 
+ // 初始化 AI 仿真系统
+ ai.initNewGame(room);
+
  // 私密发送身份
  room.players.forEach((player) => {
  io.to(player.id).emit('game_started', { role: player.role });
@@ -256,6 +266,12 @@ io.on('connection', (socket) => {
  content: filtered
  });
  engine.addLog('speech', `${player.seat}号发言: ${filtered}`, player.seat);
+ // 记录到所有 AI 的记忆中
+ for (const [, p] of room.players) {
+ if (p.isAi && p.isAlive) {
+ ai.rememberEvent(p, 'speech', player.seat, filtered);
+ }
+ }
  });
 
  // 提前结束发言
@@ -733,11 +749,39 @@ function startSpeechTimerForSpeaker(room, io) {
  return;
  }
 
- // AI 成员自动结束发言
+ // AI 成员自动发言
  if (speaker.isAi) {
  clearTimeout(room._speechTimer);
- const next = engine.nextSpeaker();
+ (async () => {
+	 try {
+	 const speech = await ai.aiGenerateSpeech(engine, speaker);
+ io.to(room.id).emit('speech_broadcast', {
+ seat: speaker.seat,
+ name: speaker.name,
+ content: speech
+ });
+ engine.addLog('speech', `${speaker.seat}号发言: ${speech}`, speaker.seat);
+ engine.markPlayerSpoke(speaker.seat);
+ // 记录到所有 AI 的记忆中
+ for (const [, p] of room.players) {
+ if (p.isAi && p.isAlive) {
+ ai.rememberEvent(p, 'speech', speaker.seat, speech);
+ }
+ }
+ // 模拟思考时间（1.5~4.5秒）
+ } catch (err) {
+	 console.log('[AI] 发言生成失败:', err.message);
+	 io.to(room.id).emit('speech_broadcast', {
+	 seat: speaker.seat,
+	 name: speaker.name,
+	 content: '...'
+	 });
+	 engine.addLog('speech', `${speaker.seat}号发言: ...`, speaker.seat);
+	 }
+	 const next = engine.nextSpeaker();
  handleSpeechTransition(room, io, next);
+ })();
+ return;
  }
 }
 
@@ -871,7 +915,7 @@ function startTieSpeaker(room, io, speakerSeat) {
  }
 
  // AI 或已断线成员自动跳过
- if (!speaker || !speaker.isAlive || speaker.disconnected || speaker.isAi) {
+ if (!speaker || !speaker.isAlive || speaker.disconnected) {
  const next = engine.nextTieSpeaker();
  if (next.phase === 'tie_vote') {
  io.to(room.id).emit('phase_change', { phase: 'tie_vote', message: '开始重新表决', tiedSeats: engine.tieOrder });
@@ -885,6 +929,40 @@ function startTieSpeaker(room, io, speakerSeat) {
  } else {
  startTieSpeaker(room, io, next.speaker);
  }
+ return;
+ }
+
+ // AI 成员自动发言（同票）
+ if (speaker.isAi) {
+ clearTimeout(room._speechTimer);
+ (async () => {
+ const speech = await ai.aiGenerateSpeech(engine, speaker);
+ io.to(room.id).emit('speech_broadcast', {
+ seat: speaker.seat,
+ name: speaker.name,
+ content: speech
+ });
+ engine.addLog('speech', `${speaker.seat}号发言: ${speech}`, speaker.seat);
+ engine.markPlayerSpoke(speaker.seat);
+ for (const [, p] of room.players) {
+ if (p.isAi && p.isAlive) {
+ ai.rememberEvent(p, 'speech', speaker.seat, speech);
+ }
+ }
+ const next = engine.nextTieSpeaker();
+ if (next.phase === 'tie_vote') {
+ io.to(room.id).emit('phase_change', { phase: 'tie_vote', message: '开始重新表决', tiedSeats: engine.tieOrder });
+ autoVoteForAiPlayers(room, io);
+ room._voteTimer = setTimeout(() => {
+ if (room.game.phase !== 'tie_vote') return;
+ const r = room.game.executeVote();
+ r.phase = 'tie_vote';
+ handleVoteResult(room, io, r);
+ }, engine.voteDuration);
+ } else {
+ startTieSpeaker(room, io, next.speaker);
+ }
+ })();
  return;
  }
 
@@ -1101,6 +1179,8 @@ function startGameWithRoles(room, io) {
  // 正确初始化引擎阶段
  engine.round = 1;
  engine.phase = 'night_werewolf';
+ // 初始化 AI 仿真系统
+ ai.initNewGame(room);
  room.players.forEach((player) => { io.to(player.id).emit('game_started', { role: player.role }); });
  io.to(room.id).emit('phase_change', { phase: 'night_werewolf', message: ' 狼人行动中', round: 1 });
  const werewolves = engine.getWerewolves().filter(w => w.isAlive);
@@ -1150,6 +1230,9 @@ function restartGame(room) {
  });
  room.seatCount = room.players.size;
  room.status = 'playing';
+
+ // 初始化 AI 仿真系统
+ ai.initNewGame(room);
 
  // 直接开始新游戏，无需回房间页
  const engine = new GameEngine(room);
@@ -1244,9 +1327,8 @@ function autoVoteForAiPlayers(room, io) {
  aliveTargets = Array.from(room.players.values())
  .filter(p => p.isAlive && p.seat !== player.seat);
  }
- const target = aliveTargets.length > 0
- ? aliveTargets[Math.floor(Math.random() * aliveTargets.length)].seat
- : 0;
+ const target = ai.aiVote(engine, player, tieSeats);
+ ai.rememberEvent(player, 'vote', player.seat, String(target));
 
  engine.votes[player.seat] = target;
  player.hasVoted = true;
@@ -1272,81 +1354,202 @@ function autoVoteForAiPlayers(room, io) {
 
 // AI 自动夜间行动
 function autoProcessAiNight(room, io) {
- const engine = room.game;
- if (!engine || !engine.phase.startsWith('night_')) return;
+	 const engine = room.game;
+	 if (!engine || !engine.phase.startsWith('night_')) return;
 
- let hasHumanActor = false;
+	 let hasHumanActor = false;
 
- for (const [, player] of room.players) {
- let isActor = false;
- switch (engine.phase) {
- case 'night_werewolf':
- isActor = player.role === 'werewolf' && player.isAlive;
- break;
- case 'night_seer':
- isActor = player.role === 'seer' && player.isAlive;
- break;
- case 'night_witch':
- isActor = player.role === 'witch' && player.isAlive;
- break;
- }
- if (isActor && player.isAi) {
- // AI 执行该角色动作
- switch (engine.phase) {
- case 'night_werewolf': {
- const targets = Array.from(room.players.values())
- .filter(p => p.isAlive && p.role !== 'werewolf');
- if (targets.length > 0) {
- const pick = targets[Math.floor(Math.random() * targets.length)];
- engine.nightActions.werewolfKill = pick.seat;
- }
- break;
- }
- // 预言家/女巫 AI 不做任何操作（跳过）
- }
- }
- if (isActor && !player.isAi) {
- hasHumanActor = true;
- }
- }
+	 // 第一阶段：收集所有 AI 行动
+	 for (const [, player] of room.players) {
+	 let isActor = false;
+	 switch (engine.phase) {
+	 case 'night_werewolf':
+	 isActor = player.role === 'werewolf' && player.isAlive;
+	 break;
+	 case 'night_seer':
+	 isActor = player.role === 'seer' && player.isAlive;
+	 break;
+	 case 'night_witch':
+	 isActor = player.role === 'witch' && player.isAlive;
+	 break;
+	 }
+	 if (isActor && player.isAi) {
+	 switch (engine.phase) {
+	 case 'night_werewolf': {
+	 const result = ai.aiWolfNightAction(engine, player);
+	 if (result && result.target > 0) {
+	 // 参与狼人投票系统
+	 engine.werewolfVotes[player.seat] = result.target;
+	 const aliveWolves = engine.getWerewolves().filter(w => w.isAlive);
+	 aliveWolves.forEach(w => {
+	 io.to(w.id).emit('werewolf_vote', {
+	 votes: { ...engine.werewolfVotes },
+	 voter: player.seat,
+	 target: result.target
+	 });
+	 });
+	 // 记录 AI 记忆
+	 ai.rememberEvent(player, 'night_kill', result.target, `狼人选杀 ${result.target}号`);
+	 }
+	 break;
+	 }
+	 case 'night_seer': {
+	 const result = ai.aiSeerNightAction(engine, player);
+	 if (result && result.target > 0) {
+	 // 发送查验结果给 AI
+	 const targetPlayer = Array.from(room.players.values()).find(p => p.seat === result.target);
+	 const targetName = targetPlayer ? targetPlayer.name : '未知';
+	 io.to(player.id).emit('night_result', {
+	 message: `你查验了 ${result.target}号 ${targetName}，他的身份是${result.isWerewolf ? '【狼人】' : '【好人】'}`
+	 });
+	 io.to(player.id).emit('seer_result', {
+	 target: { seat: result.target, name: targetName },
+	 isWerewolf: result.isWerewolf
+	 });
+	 ai.rememberEvent(player, 'night_action', result.target, `查验 ${result.target}号: ${result.isWerewolf ? '狼人' : '好人'}`);
+	 }
+	 break;
+	 }
+	 case 'night_witch': {
+	 const result = ai.aiWitchNightAction(engine, player);
+	 // 发送女巫信息给 AI
+	 const killedSeat = engine.nightActions.werewolfKill;
+	 const killedPlayer = killedSeat
+	 ? Array.from(room.players.values()).find(p => p.seat === killedSeat)
+	 : null;
+	 const witchInfo = {
+	 tonightKilled: killedPlayer ? { seat: killedPlayer.seat, name: killedPlayer.name } : null,
+	 hasSave: !engine.witchUsedSave,
+	 hasKill: !engine.witchUsedKill,
+	 aliveTargets: Array.from(room.players.values())
+	 .filter(p => p.isAlive)
+	 .map(p => ({ seat: p.seat, name: p.name }))
+	 };
+	 io.to(player.id).emit('witch_info', witchInfo);
+	 if (result.save) {
+	 io.to(player.id).emit('night_result', { message: `你使用了解药，救活了 ${killedSeat}号` });
+	 ai.rememberEvent(player, 'night_action', killedSeat, '使用解药救人');
+	 }
+	 if (result.kill) {
+	 io.to(player.id).emit('night_result', { message: `你使用了毒药，毒杀了 ${result.kill}号` });
+	 ai.rememberEvent(player, 'night_action', result.kill, '使用毒药');
+	 }
+	 break;
+	 }
+	 }
+	 }
+	 if (isActor && !player.isAi) {
+	 hasHumanActor = true;
+	 }
+	 }
 
- // 全部是 AI，直接推进
- if (!hasHumanActor) {
- clearTimeout(room._nightTimer);
- const next = engine.advanceNight();
- if (!next.isNight) {
- // 天亮：先发上一阶段结束
- if (next.prevPhase && phaseFlowNames[next.prevPhase]) {
- io.to(room.id).emit('phase_change', {
- phase: next.phase, deaths: next.deaths,
- message: `${phaseFlowNames[next.prevPhase]}行动结束`,
- players: Array.from(room.players.values()).map(p => ({
- seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
- }))
- });
- }
- if (checkAndHandleGameEnd(room, io)) return;
- triggerHunterPassive(room, io, false);
- const deaths_a = next.deaths || [];
- const deathMsg_a = deaths_a.length
- ? `<strong>天亮了</strong>，昨晚 ${deaths_a.map(d => `${d.seat}号成员死亡`).join(' ')}`
- : '<strong>天亮了</strong>，昨晚是平安夜';
- room.game.startFreeSpeech();
- io.to(room.id).emit('phase_change', {
- phase: 'free_speech', deaths: deaths_a,
- message: ` ${deathMsg_a}`,
-	 round: engine.round,
- players: Array.from(room.players.values()).map(p => ({
- seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
- }))
- });
- startSpeechTimerForSpeaker(room, io);
- } else {
- // 夜间下一阶段：handleNightPhase 统一发「结束+开始」
- handleNightPhase(room, io, next);
- }
- }
-}
+	 // 第二阶段：如果没有人类行动者，推进阶段
+	 if (!hasHumanActor) {
+	 clearTimeout(room._nightTimer);
+
+	 // 狼人阶段：检查投票是否完成
+	 if (engine.phase === 'night_werewolf') {
+	 const aliveWolves = engine.getWerewolves().filter(w => w.isAlive);
+	 const votedCount = Object.keys(engine.werewolfVotes).length;
+	 const totalWolves = aliveWolves.length;
+
+	 if (votedCount >= totalWolves) {
+	 // 所有狼人（全 AI）已投票，统计结果
+	 const tally = {};
+	 Object.values(engine.werewolfVotes).forEach(t => {
+	 if (t) tally[t] = (tally[t] || 0) + 1;
+	 });
+	 const maxVotes = Math.max(...Object.values(tally), 0);
+	 const topTargets = Object.entries(tally).filter(([_, c]) => c === maxVotes);
+
+	 if (topTargets.length === 1 && maxVotes >= Math.ceil(totalWolves / 2)) {
+	 engine.nightActions.werewolfKill = parseInt(topTargets[0][0]);
+	 aliveWolves.forEach(w => {
+	 io.to(w.id).emit('night_result', { message: `已确认处理 ${topTargets[0][0]}号` });
+	 });
+	 engine.werewolfVotes = {};
+	 } else {
+	 // 分歧，随机选一个目标
+	 engine.werewolfVotes = {};
+	 const nonWolfTargets = Array.from(room.players.values())
+	 .filter(p => p.isAlive && p.role !== 'werewolf');
+	 if (nonWolfTargets.length > 0) {
+	 const pick = nonWolfTargets[Math.floor(Math.random() * nonWolfTargets.length)];
+	 engine.nightActions.werewolfKill = pick.seat;
+	 aliveWolves.forEach(w => {
+	 io.to(w.id).emit('night_result', { message: `狼人分歧，随机处理 ${pick.seat}号` });
+	 });
+	 }
+	 }
+	 }
+
+	 // 推进到下一阶段
+	 const next = engine.advanceNight();
+	 if (!next.isNight) {
+	 // 天亮
+	 if (next.prevPhase && phaseFlowNames[next.prevPhase]) {
+	 io.to(room.id).emit('phase_change', {
+	 phase: next.phase, deaths: next.deaths,
+	 message: `${phaseFlowNames[next.prevPhase]}行动结束`,
+	 players: Array.from(room.players.values()).map(p => ({
+	 seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+	 }))
+	 });
+	 }
+	 if (checkAndHandleGameEnd(room, io)) return;
+	 triggerHunterPassive(room, io, false);
+	 const deaths_a = next.deaths || [];
+	 const deathMsg_a = deaths_a.length
+	 ? `<strong>天亮了</strong>，昨晚 ${deaths_a.map(d => `${d.seat}号成员死亡`).join(' ')}`
+	 : '<strong>天亮了</strong>，昨晚是平安夜';
+	 room.game.startFreeSpeech();
+	 io.to(room.id).emit('phase_change', {
+	 phase: 'free_speech', deaths: deaths_a,
+	 message: ` ${deathMsg_a}`,
+		 round: engine.round,
+	 players: Array.from(room.players.values()).map(p => ({
+	 seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+	 }))
+	 });
+	 startSpeechTimerForSpeaker(room, io);
+	 } else {
+	 handleNightPhase(room, io, next);
+	 }
+	 } else {
+	 // 非狼人阶段（预言家/女巫）：直接推进
+	 const next = engine.advanceNight();
+	 if (!next.isNight) {
+	 if (next.prevPhase && phaseFlowNames[next.prevPhase]) {
+	 io.to(room.id).emit('phase_change', {
+	 phase: next.phase, deaths: next.deaths,
+	 message: `${phaseFlowNames[next.prevPhase]}行动结束`,
+	 players: Array.from(room.players.values()).map(p => ({
+	 seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+	 }))
+	 });
+	 }
+	 if (checkAndHandleGameEnd(room, io)) return;
+	 triggerHunterPassive(room, io, false);
+	 const deaths_a = next.deaths || [];
+	 const deathMsg_a = deaths_a.length
+	 ? `<strong>天亮了</strong>，昨晚 ${deaths_a.map(d => `${d.seat}号成员死亡`).join(' ')}`
+	 : '<strong>天亮了</strong>，昨晚是平安夜';
+	 room.game.startFreeSpeech();
+	 io.to(room.id).emit('phase_change', {
+	 phase: 'free_speech', deaths: deaths_a,
+	 message: ` ${deathMsg_a}`,
+		 round: engine.round,
+	 players: Array.from(room.players.values()).map(p => ({
+	 seat: p.seat, name: p.name, isAlive: p.isAlive, disconnected: p.disconnected
+	 }))
+	 });
+	 startSpeechTimerForSpeaker(room, io);
+	 } else {
+	 handleNightPhase(room, io, next);
+	 }
+	 }
+	 }
+	}
 
 server.listen(PORT, () => {
  console.log(`[启动] 协作平台运行在 http://localhost:${PORT}`);
